@@ -8,24 +8,32 @@ import net.stits.kademlia.data.*
 import net.stits.osen.Address
 import net.stits.osen.Message
 import net.stits.osen.P2P
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
 import java.math.BigInteger
 
 
-typealias IdGenerator = (value: Any) -> BigInteger
-
 @Service
-class KademliaService(private val discoveryService: DiscoveryService, private val identityService: IdentityService) {
+class KademliaService {
+    @Autowired
+    lateinit var discoveryService: DiscoveryService
+
+    @Autowired
+    lateinit var identityService: IdentityService
+
+    @Autowired
+    lateinit var p2p: P2P
+
     private val mapper = ObjectMapper().registerModule(KotlinModule())
     private var bootstrapped = false
 
     fun bootstrap(bootstrapAddress: Address, myId: BigInteger) {
         println("Trying to bootstrap $myId with node $bootstrapAddress")
 
-        val request = DefaultPayload(myId, BigInteger.ZERO)
+        val request = FindNodeRequest(myId, myId, BigInteger.ZERO)
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_NODE_REQ, request)
 
-        P2P.send(bootstrapAddress, message, identityService.getPort(), _class = FindNodeResponse::class.java)
+        p2p.send(bootstrapAddress, message, identityService.port, _class = FindNodeResponse::class.java)
                 ?: throw RuntimeException("Unable to bootstrap $myId with node $bootstrapAddress")
 
         bootstrapped = true
@@ -46,10 +54,9 @@ class KademliaService(private val discoveryService: DiscoveryService, private va
         return sendPing(nodeAddr)
     }
 
-    fun store(value: Any, generateId: IdGenerator): Boolean {
+    fun store(id: BigInteger, value: Any): Boolean {
         assertBootstrapped()
 
-        val id = generateId(value)
         val serializedValue = mapper.writeValueAsBytes(value)
 
         val nodeToStore = findNode(id)
@@ -112,7 +119,7 @@ class KademliaService(private val discoveryService: DiscoveryService, private va
         val payload = DefaultPayload(identityService.getId(), to.getId())
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.PING, payload)
 
-        val result = P2P.send(to.getAddress(), message, identityService.getPort(), _class = Boolean::class.java)
+        val result = p2p.send(to.getAddress(), message, identityService.port, _class = Boolean::class.java)
         return result != null
     }
 
@@ -120,7 +127,7 @@ class KademliaService(private val discoveryService: DiscoveryService, private va
         val payload = FindNodeRequest(id, identityService.getId(), to.getId())
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_NODE_REQ, payload)
 
-        val result = P2P.send(to.getAddress(), message, identityService.getPort(), _class = FindNodeResponse::class.java)
+        val result = p2p.send(to.getAddress(), message, identityService.port, _class = FindNodeResponse::class.java)
                 ?: throw RuntimeException("Unable to receive closest nodes for id: $id from node $to")
 
         return result as FindNodeResponse
@@ -130,7 +137,7 @@ class KademliaService(private val discoveryService: DiscoveryService, private va
         val payload = FindValueRequest(id, identityService.getId(), to.getId())
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_VALUE_REQ, payload)
 
-        val result = P2P.send(to.getAddress(), message, identityService.getPort(), _class = FindValueResponse::class.java)
+        val result = p2p.send(to.getAddress(), message, identityService.port, _class = FindValueResponse::class.java)
                 ?: throw RuntimeException("Unable to get value of id: $id from node: $to")
 
         return result as FindValueResponse
@@ -140,7 +147,7 @@ class KademliaService(private val discoveryService: DiscoveryService, private va
         val payload = StoreRequest(id, value, identityService.getId(), to.getId())
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.STORE_REQ, payload)
 
-        val result = P2P.send(to.getAddress(), message, identityService.getPort(), _class = StoreResponse::class.java)
+        val result = p2p.send(to.getAddress(), message, identityService.port, _class = StoreResponse::class.java)
                 ?: throw RuntimeException("Unable to store value of id: $id on node: $to")
 
         return result as StoreResponse

@@ -8,6 +8,10 @@ import java.math.BigInteger
 class StorageService {
     private val storage = hashMapOf<BigInteger, ByteArray>()
 
+    fun getStorage(): Map<BigInteger, ByteArray> {
+        return storage
+    }
+
     fun put(id: BigInteger, data: ByteArray): Boolean {
         if (storage.containsKey(id)) return false
 

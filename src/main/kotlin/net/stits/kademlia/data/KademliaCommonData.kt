@@ -5,20 +5,8 @@ import java.math.BigInteger
 
 
 data class KAddress(private val address: Address, private val id: BigInteger) {
-    fun getBitAtIndex(bitIndex: Int, bitSpace: Int): Int {
-        return if (id.testBit((bitSpace - 1) - bitIndex)) 1 else 0
-    }
-
     fun getAddress(): Address {
         return address
-    }
-
-    fun getHost(): String {
-        return address.host
-    }
-
-    fun getPort(): Int {
-        return address.port
     }
 
     fun getId(): BigInteger {

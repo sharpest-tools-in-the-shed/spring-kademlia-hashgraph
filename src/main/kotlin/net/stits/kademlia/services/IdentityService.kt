@@ -11,30 +11,15 @@ import java.security.SecureRandom
 
 @Service
 class IdentityService {
-    @Value("\${node.host}")
     private var host: String = "localhost"
 
-    @Value("\${node.port}")
-    private var port: Int = 1337
+    @Value("\${NODE_PORT}")
+    var port: Int = 1337
 
     private var id: BigInteger = BigInteger.ONE
 
-    init {
-        // Now generates random sha256 as id
-        val md = MessageDigest.getInstance("SHA-256")
-        val randomSeed = SecureRandom.getInstanceStrong().ints().findAny().asInt
-        md.update(randomSeed.toByte())
-        val digest = md.digest()
-
-        id = BigInteger(digest)
-    }
-
     fun getHost(): String {
         return host
-    }
-
-    fun getPort(): Int {
-        return port
     }
 
     fun getAddress(): Address {
@@ -42,10 +27,20 @@ class IdentityService {
     }
 
     fun getKAddress(): KAddress {
-        return KAddress(getAddress(), id)
+        return KAddress(getAddress(), getId())
     }
 
     fun getId(): BigInteger {
+        if (id == BigInteger.ONE) {
+            // Now generates random sha256 as id
+            val md = MessageDigest.getInstance("SHA-256")
+            val random = SecureRandom()
+            md.update(random.nextInt().toByte())
+            val digest = md.digest()
+
+            id = BigInteger(digest)
+        }
+
         return id
     }
 }

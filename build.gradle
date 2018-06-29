@@ -20,11 +20,15 @@ apply plugin: 'io.spring.dependency-management'
 
 repositories {
   mavenCentral()
+  flatDir {
+    dirs 'libs'
+  }
 }
 
 dependencies {
   compile "org.springframework.boot:spring-boot-starter-web"
   compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+  compile name: "spring-p2p-extension-0.3.2"
 }
 
 compileKotlin {
