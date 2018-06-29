@@ -24,7 +24,7 @@ object KademliaMessageTypes {
 class KademliaController(private val discoveryService: DiscoveryService, private val storageService: StorageService) {
 
     @On(KademliaMessageTypes.PING)
-    fun handlePing(sender: Address, request: DefaultPayload) {
+    fun handlePing(sender: Address, request: DefaultPayload, session: Session) {
         println("Got PING message from: $sender, payload: $request")
 
         discoveryService.addNode(KAddress(sender, request.from)) // TODO [relays]: this should be something else (idc now)
@@ -32,18 +32,20 @@ class KademliaController(private val discoveryService: DiscoveryService, private
         val response = DefaultPayload(from = MY_ADDRESS.getId(), to = request.from)
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.PONG, response)
 
-        P2P.send(sender, message, MY_ADDRESS.getPort())
+        P2P.send(sender, message, MY_ADDRESS.getPort(), _session = session)
     }
 
     @On(KademliaMessageTypes.PONG)
-    fun handlePong(sender: Address, request: DefaultPayload) {
-        println("Got PONG message from: $sender, payload: $request")
+    fun handlePong(sender: Address, response: DefaultPayload): Boolean {
+        println("Got PONG message from: $sender, payload: $response")
 
-        discoveryService.addNode(KAddress(sender, request.from)) // TODO [relays]: this should be something else (idc now)
+        discoveryService.addNode(KAddress(sender, response.from)) // TODO [relays]: this should be something else (idc now)
+
+        return true
     }
 
     @On(KademliaMessageTypes.FIND_NODE_REQ)
-    fun handleFindNodeRequest(sender: Address, request: FindNodeRequest) {
+    fun handleFindNodeRequest(sender: Address, request: FindNodeRequest, session: Session) {
         println("Got FIND_NODE_REQ message from: $sender, payload: $request")
 
         discoveryService.addNode(KAddress(sender, request.from)) // TODO [relays]: this should be something else (idc now)
@@ -52,21 +54,21 @@ class KademliaController(private val discoveryService: DiscoveryService, private
         val response = FindNodeResponse(id = request.id, nodesToAsk = nodesToAsk, from = MY_ADDRESS.getId(), to = request.from)
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_NODE_RES, response)
 
-        P2P.send(sender, message, MY_ADDRESS.getPort())
+        P2P.send(sender, message, MY_ADDRESS.getPort(), _session = session)
     }
 
     @On(KademliaMessageTypes.FIND_NODE_RES)
-    fun handleFindNodeResponse(sender: Address, request: FindNodeResponse) {
-        println("Got FIND_NODE_RES message from: $sender, payload: $request")
+    fun handleFindNodeResponse(sender: Address, response: FindNodeResponse): FindNodeResponse {
+        println("Got FIND_NODE_RES message from: $sender, payload: $response")
 
-        discoveryService.addNode(KAddress(sender, request.from)) // TODO [relays]: this should be something else (idc now)
+        discoveryService.addNode(KAddress(sender, response.from)) // TODO [relays]: this should be something else (idc now)
 
-        // TODO: find needed node and handle it or send FIND_NODE_REQ to all these guys
+        return response
     }
 
     @On(KademliaMessageTypes.FIND_VALUE_REQ)
-    fun handleFindValueRequest(sender: Address, request: FindValueRequest) {
-        println("Got FIND_NODE_RES message from: $sender, payload: $request")
+    fun handleFindValueRequest(sender: Address, request: FindValueRequest, session: Session) {
+        println("Got FIND_VALUE_REQ message from: $sender, payload: $request")
 
         discoveryService.addNode(KAddress(sender, request.from)) // TODO [relays]: this should be something else (idc now)
 
@@ -80,21 +82,21 @@ class KademliaController(private val discoveryService: DiscoveryService, private
 
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_VALUE_RES, response)
 
-        P2P.send(sender, message, MY_ADDRESS.getPort())
+        P2P.send(sender, message, MY_ADDRESS.getPort(), _session = session)
     }
 
     @On(KademliaMessageTypes.FIND_VALUE_RES)
-    fun handleFindValueResponse(sender: Address, request: FindValueResponse) {
-        println("Got FIND_NODE_RES message from: $sender, payload: $request")
+    fun handleFindValueResponse(sender: Address, response: FindValueResponse): FindValueResponse {
+        println("Got FIND_VALUE_RES message from: $sender, payload: $response")
 
-        discoveryService.addNode(KAddress(sender, request.from)) // TODO [relays]: this should be something else (idc now)
+        discoveryService.addNode(KAddress(sender, response.from)) // TODO [relays]: this should be something else (idc now)
 
-        // TODO: handle found value or send FIND_VALUE_REQ to all these guys
+        return response
     }
 
     @On(KademliaMessageTypes.STORE_REQ)
-    fun handleStoreRequest(sender: Address, request: StoreRequest) {
-        println("Got FIND_NODE_RES message from: $sender, payload: $request")
+    fun handleStoreRequest(sender: Address, request: StoreRequest, session: Session) {
+        println("Got STORE_REQ message from: $sender, payload: $request")
 
         discoveryService.addNode(KAddress(sender, request.from)) // TODO [relays]: this should be something else (idc now)
 
@@ -102,6 +104,15 @@ class KademliaController(private val discoveryService: DiscoveryService, private
         val response = StoreResponse(id = request.id, success = success, from = MY_ADDRESS.getId(), to = request.from)
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.STORE_RES, response)
 
-        P2P.send(sender, message, MY_ADDRESS.getPort())
+        P2P.send(sender, message, MY_ADDRESS.getPort(), _session = session)
+    }
+
+    @On(KademliaMessageTypes.STORE_RES)
+    fun handleStoreResponse(sender: Address, response: StoreResponse): StoreResponse {
+        println("Got STORE_RES message from: $sender, payload: $response")
+
+        discoveryService.addNode(KAddress(sender, response.from)) // TODO [relays]: this should be something else (idc now)
+
+        return response
     }
 }

@@ -18,11 +18,41 @@ class DiscoveryService {
         return addressBook.addNode(address)
     }
 
+    fun addNodes(addresses: List<KAddress>) {
+        return addressBook.addNodes(addresses)
+    }
+
+    fun toList(): List<KAddress> {
+        return addressBook.getFlat()
+    }
+
+    fun addNewNodes(nodes: List<KAddress>): List<KAddress> {
+        val notAskedNodes = nodes.filter { !containsId(it.getId()) }
+        addNodes(nodes)
+        return notAskedNodes
+    }
+
     fun removeNode(address: KAddress): Boolean {
         return addressBook.removeNode(address)
     }
 
+    fun getClosest(id: BigInteger): KAddress? {
+        return addressBook.getClosestTo(id).firstOrNull()
+    }
+
     fun getClosestKBucket(id: BigInteger): List<KAddress> {
         return addressBook.getClosestTo(id)
+    }
+
+    fun containsId(id: BigInteger): Boolean {
+        return addressBook.containsNode(id)
+    }
+
+    fun containsAll(nodes: List<KAddress>): Boolean {
+        return addressBook.getFlat().containsAll(nodes)
+    }
+
+    fun getNodeById(id: BigInteger): KAddress? {
+        return addressBook.getNodeById(id)
     }
 }

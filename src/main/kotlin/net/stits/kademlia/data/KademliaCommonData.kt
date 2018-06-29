@@ -9,6 +9,10 @@ data class KAddress(private val address: Address, private val id: BigInteger) {
         return if (id.testBit((bitSpace - 1) - bitIndex)) 1 else 0
     }
 
+    fun getAddress(): Address {
+        return address
+    }
+
     fun getHost(): String {
         return address.host
     }
