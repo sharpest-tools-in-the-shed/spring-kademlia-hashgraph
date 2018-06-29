@@ -2,7 +2,6 @@ package net.stits.kademlia.services
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
-import net.stits.MY_ADDRESS
 import net.stits.kademlia.controllers.KademliaMessageTypes
 import net.stits.kademlia.controllers.TOPIC_KADEMLIA_COMMON
 import net.stits.kademlia.data.*
@@ -16,7 +15,7 @@ import java.math.BigInteger
 typealias IdGenerator = (value: Any) -> BigInteger
 
 @Service
-class KademliaService(private val discoveryService: DiscoveryService) {
+class KademliaService(private val discoveryService: DiscoveryService, private val identityService: IdentityService) {
     private val mapper = ObjectMapper().registerModule(KotlinModule())
     private var bootstrapped = false
 
@@ -26,7 +25,7 @@ class KademliaService(private val discoveryService: DiscoveryService) {
         val request = DefaultPayload(myId, BigInteger.ZERO)
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_NODE_REQ, request)
 
-        P2P.send(bootstrapAddress, message, MY_ADDRESS.getPort(), _class = FindNodeResponse::class.java)
+        P2P.send(bootstrapAddress, message, identityService.getPort(), _class = FindNodeResponse::class.java)
                 ?: throw RuntimeException("Unable to bootstrap $myId with node $bootstrapAddress")
 
         bootstrapped = true
@@ -110,38 +109,38 @@ class KademliaService(private val discoveryService: DiscoveryService) {
     }
 
     private fun sendPing(to: KAddress): Boolean {
-        val payload = DefaultPayload(MY_ADDRESS.getId(), to.getId())
+        val payload = DefaultPayload(identityService.getId(), to.getId())
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.PING, payload)
 
-        val result = P2P.send(to.getAddress(), message, MY_ADDRESS.getPort(), _class = Boolean::class.java)
+        val result = P2P.send(to.getAddress(), message, identityService.getPort(), _class = Boolean::class.java)
         return result != null
     }
 
     private fun sendFindNode(id: BigInteger, to: KAddress): FindNodeResponse {
-        val payload = FindNodeRequest(id, MY_ADDRESS.getId(), to.getId())
+        val payload = FindNodeRequest(id, identityService.getId(), to.getId())
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_NODE_REQ, payload)
 
-        val result = P2P.send(to.getAddress(), message, MY_ADDRESS.getPort(), _class = FindNodeResponse::class.java)
+        val result = P2P.send(to.getAddress(), message, identityService.getPort(), _class = FindNodeResponse::class.java)
                 ?: throw RuntimeException("Unable to receive closest nodes for id: $id from node $to")
 
         return result as FindNodeResponse
     }
 
     private fun sendFindValue(id: BigInteger, to: KAddress): FindValueResponse {
-        val payload = FindValueRequest(id, MY_ADDRESS.getId(), to.getId())
+        val payload = FindValueRequest(id, identityService.getId(), to.getId())
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_VALUE_REQ, payload)
 
-        val result = P2P.send(to.getAddress(), message, MY_ADDRESS.getPort(), _class = FindValueResponse::class.java)
+        val result = P2P.send(to.getAddress(), message, identityService.getPort(), _class = FindValueResponse::class.java)
                 ?: throw RuntimeException("Unable to get value of id: $id from node: $to")
 
         return result as FindValueResponse
     }
 
     private fun sendStore(id: BigInteger, value: ByteArray, to: KAddress): StoreResponse {
-        val payload = StoreRequest(id, value, MY_ADDRESS.getId(), to.getId())
+        val payload = StoreRequest(id, value, identityService.getId(), to.getId())
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.STORE_REQ, payload)
 
-        val result = P2P.send(to.getAddress(), message, MY_ADDRESS.getPort(), _class = StoreResponse::class.java)
+        val result = P2P.send(to.getAddress(), message, identityService.getPort(), _class = StoreResponse::class.java)
                 ?: throw RuntimeException("Unable to store value of id: $id on node: $to")
 
         return result as StoreResponse

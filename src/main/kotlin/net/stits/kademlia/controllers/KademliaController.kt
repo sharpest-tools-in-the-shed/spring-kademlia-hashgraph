@@ -1,8 +1,9 @@
 package net.stits.kademlia.controllers
 
-import net.stits.MY_ADDRESS
+
 import net.stits.kademlia.data.*
 import net.stits.kademlia.services.DiscoveryService
+import net.stits.kademlia.services.IdentityService
 import net.stits.kademlia.services.StorageService
 import net.stits.osen.*
 
@@ -21,7 +22,10 @@ object KademliaMessageTypes {
 
 
 @P2PController(TOPIC_KADEMLIA_COMMON)
-class KademliaController(private val discoveryService: DiscoveryService, private val storageService: StorageService) {
+class KademliaController(
+        private val discoveryService: DiscoveryService,
+        private val storageService: StorageService,
+        private val identityService: IdentityService) {
 
     @On(KademliaMessageTypes.PING)
     fun handlePing(sender: Address, request: DefaultPayload, session: Session) {
@@ -29,10 +33,10 @@ class KademliaController(private val discoveryService: DiscoveryService, private
 
         discoveryService.addNode(KAddress(sender, request.from)) // TODO [relays]: this should be something else (idc now)
 
-        val response = DefaultPayload(from = MY_ADDRESS.getId(), to = request.from)
+        val response = DefaultPayload(from = identityService.getId(), to = request.from)
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.PONG, response)
 
-        P2P.send(sender, message, MY_ADDRESS.getPort(), _session = session)
+        P2P.send(sender, message, identityService.getPort(), _session = session)
     }
 
     @On(KademliaMessageTypes.PONG)
@@ -51,10 +55,10 @@ class KademliaController(private val discoveryService: DiscoveryService, private
         discoveryService.addNode(KAddress(sender, request.from)) // TODO [relays]: this should be something else (idc now)
 
         val nodesToAsk = discoveryService.getClosestKBucket(request.id)
-        val response = FindNodeResponse(id = request.id, nodesToAsk = nodesToAsk, from = MY_ADDRESS.getId(), to = request.from)
+        val response = FindNodeResponse(id = request.id, nodesToAsk = nodesToAsk, from = identityService.getId(), to = request.from)
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_NODE_RES, response)
 
-        P2P.send(sender, message, MY_ADDRESS.getPort(), _session = session)
+        P2P.send(sender, message, identityService.getPort(), _session = session)
     }
 
     @On(KademliaMessageTypes.FIND_NODE_RES)
@@ -76,13 +80,13 @@ class KademliaController(private val discoveryService: DiscoveryService, private
         val nodesToAsk = discoveryService.getClosestKBucket(request.id)
 
         val response: FindValueResponse = if (value != null)
-            FindValueResponse(id = request.id, value = value, from = MY_ADDRESS.getId(), to = request.from)
+            FindValueResponse(id = request.id, value = value, from = identityService.getId(), to = request.from)
         else
-            FindValueResponse(id = request.id, nodesToAsk = nodesToAsk, from = MY_ADDRESS.getId(), to = request.from)
+            FindValueResponse(id = request.id, nodesToAsk = nodesToAsk, from = identityService.getId(), to = request.from)
 
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_VALUE_RES, response)
 
-        P2P.send(sender, message, MY_ADDRESS.getPort(), _session = session)
+        P2P.send(sender, message, identityService.getPort(), _session = session)
     }
 
     @On(KademliaMessageTypes.FIND_VALUE_RES)
@@ -101,10 +105,10 @@ class KademliaController(private val discoveryService: DiscoveryService, private
         discoveryService.addNode(KAddress(sender, request.from)) // TODO [relays]: this should be something else (idc now)
 
         val success = storageService.put(request.id, request.value)
-        val response = StoreResponse(id = request.id, success = success, from = MY_ADDRESS.getId(), to = request.from)
+        val response = StoreResponse(id = request.id, success = success, from = identityService.getId(), to = request.from)
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.STORE_RES, response)
 
-        P2P.send(sender, message, MY_ADDRESS.getPort(), _session = session)
+        P2P.send(sender, message, identityService.getPort(), _session = session)
     }
 
     @On(KademliaMessageTypes.STORE_RES)
