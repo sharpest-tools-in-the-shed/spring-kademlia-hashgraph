@@ -23,7 +23,7 @@ object KademliaMessageTypes {
 
 
 @P2PController(TOPIC_KADEMLIA_COMMON)
-class KademliaController {
+class KademliaControllerP2P {
     @Autowired
     lateinit var p2p: P2P
 

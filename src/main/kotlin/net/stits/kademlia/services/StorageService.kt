@@ -6,20 +6,20 @@ import java.math.BigInteger
 
 @Service
 class StorageService {
-    private val storage = hashMapOf<BigInteger, ByteArray>()
+    private val storage = hashMapOf<BigInteger, Any>()
 
-    fun getStorage(): Map<BigInteger, ByteArray> {
+    fun getStorage(): Map<BigInteger, Any> {
         return storage
     }
 
-    fun put(id: BigInteger, data: ByteArray): Boolean {
+    fun put(id: BigInteger, data: Any): Boolean {
         if (storage.containsKey(id)) return false
 
         storage[id] = data
         return true
     }
 
-    fun get(id: BigInteger): ByteArray? {
+    fun get(id: BigInteger): Any? {
         return storage[id]
     }
 
@@ -30,7 +30,7 @@ class StorageService {
         return true
     }
 
-    fun update(id: BigInteger, data: ByteArray): Boolean {
+    fun update(id: BigInteger, data: Any): Boolean {
         if (!storage.containsKey(id)) return false
 
         storage[id] = data

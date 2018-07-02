@@ -7,17 +7,14 @@ import net.stits.kademlia.services.KademliaService
 import net.stits.kademlia.services.StorageService
 import net.stits.osen.Address
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestParam
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.*
 import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
 
 @RestController
-class KademliaMonitorController {
+class KademliaControllerWeb {
     @Autowired
     lateinit var identityService: IdentityService
 
@@ -30,14 +27,17 @@ class KademliaMonitorController {
     @Autowired
     lateinit var kademliaService: KademliaService
 
-    @GetMapping("/addressbook")
+
+    @GetMapping("/addresses/list")
     fun getAddressBook(): List<KAddress> {
         return discoveryService.toList()
     }
 
-    @GetMapping("/storage")
-    fun getStorage(): Map<BigInteger, ByteArray> {
-        return storageService.getStorage()
+    @GetMapping("/ping/{id}")
+    fun ping(@PathVariable id: String): Boolean {
+        val _id = BigInteger(id)
+
+        return kademliaService.ping(_id)
     }
 
     @PostMapping("/bootstrap")
@@ -46,8 +46,13 @@ class KademliaMonitorController {
         return "Ok"
     }
 
-    @PostMapping("/store")
-    fun store(@RequestParam value: String): String {
+    @GetMapping("/storage/list")
+    fun getStorage(): Map<BigInteger, Any> {
+        return storageService.getStorage()
+    }
+
+    @PostMapping("/storage/add")
+    fun storeString(@RequestParam value: String): String {
         val md = MessageDigest.getInstance("SHA-256")
         md.update(value.toByteArray(StandardCharsets.UTF_8))
         val digest = md.digest()
@@ -56,5 +61,11 @@ class KademliaMonitorController {
         kademliaService.store(id, value)
 
         return "Ok"
+    }
+
+    @GetMapping("/storage/{id}")
+    fun getFromStorage(@RequestParam id: String): Any? {
+        val _id = BigInteger(id)
+        return storageService.get(_id)
     }
 }
