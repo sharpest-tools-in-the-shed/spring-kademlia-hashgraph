@@ -46,16 +46,16 @@ class KademliaControllerP2P {
         val response = DefaultPayload(from = identityService.getId(), to = request.from)
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.PONG, response)
 
-        p2p.send(sender, message, identityService.port, _session = session)
+        p2p.send(sender, message, identityService.getPort(), _session = session)
     }
 
     @On(KademliaMessageTypes.PONG)
-    fun handlePong(sender: Address, response: DefaultPayload): Boolean {
+    fun handlePong(sender: Address, response: DefaultPayload): String {
         println("Got PONG message from: $sender, payload: $response")
 
         discoveryService.addNode(KAddress(sender, response.from)) // TODO [relays]: this should be something else (idc now)
 
-        return true
+        return "true"
     }
 
     @On(KademliaMessageTypes.FIND_NODE_REQ)
@@ -68,7 +68,7 @@ class KademliaControllerP2P {
         val response = FindNodeResponse(id = request.id, nodesToAsk = nodesToAsk, from = identityService.getId(), to = request.from)
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_NODE_RES, response)
 
-        p2p.send(sender, message, identityService.port, _session = session)
+        p2p.send(sender, message, identityService.getPort(), _session = session)
     }
 
     @On(KademliaMessageTypes.FIND_NODE_RES)
@@ -96,7 +96,7 @@ class KademliaControllerP2P {
 
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_VALUE_RES, response)
 
-        p2p.send(sender, message, identityService.port, _session = session)
+        p2p.send(sender, message, identityService.getPort(), _session = session)
     }
 
     @On(KademliaMessageTypes.FIND_VALUE_RES)
@@ -118,7 +118,7 @@ class KademliaControllerP2P {
         val response = StoreResponse(id = request.id, success = success, from = identityService.getId(), to = request.from)
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.STORE_RES, response)
 
-        p2p.send(sender, message, identityService.port, _session = session)
+        p2p.send(sender, message, identityService.getPort(), _session = session)
     }
 
     @On(KademliaMessageTypes.STORE_RES)

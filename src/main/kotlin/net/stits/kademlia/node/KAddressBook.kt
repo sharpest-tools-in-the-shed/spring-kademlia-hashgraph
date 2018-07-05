@@ -10,7 +10,7 @@ import java.math.BigInteger
  * @param k {Int} - network k parameter (number of computers in network that unlikely to be offline at the same time) - usually 20
  * @param idSpaceSize {Int} - keysize in bits (or id size in bits) - using sha256 to generate keys means using idSpaceSize = 256
  */
-abstract class KAddressBook(protected val me: KAddress, protected val k: Int = 2, protected val idSpaceSize: Int = 256) {
+abstract class KAddressBook(val me: KAddress, protected val k: Int = 2, protected val idSpaceSize: Int = 256) {
     /**
      * Adds node to address book
      *
@@ -108,11 +108,11 @@ class KHeap(me: KAddress, k: Int = 2, idSpaceSize: Int = 256): KAddressBook(me, 
 
     override fun getFlat(): List<KAddress> {
         return heap.values.toList()
+                .filter { it.getId() != me.getId() } // removing myself from result
     }
 
-    private fun getFlatSortedByDistanceTo(id: BigInteger): List<KAddress> {
+    fun getFlatSortedByDistanceTo(id: BigInteger): List<KAddress> {
         return getFlat()
                 .sortedBy { it.getId().xor(id) } // sorting by distance
-                .filter { it.getId() != me.getId() } // removing myself from result
     }
 }

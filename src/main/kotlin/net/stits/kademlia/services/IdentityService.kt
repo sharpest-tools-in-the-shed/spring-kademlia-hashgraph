@@ -2,7 +2,8 @@ package net.stits.kademlia.services
 
 import net.stits.kademlia.data.KAddress
 import net.stits.osen.Address
-import org.springframework.beans.factory.annotation.Value
+import net.stits.osen.P2P
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
 import java.math.BigInteger
 import java.security.MessageDigest
@@ -11,19 +12,22 @@ import java.security.SecureRandom
 
 @Service
 class IdentityService {
+    @Autowired
+    lateinit var p2p: P2P
+
     private var host: String = "localhost"
-
-    @Value("\${NODE_PORT}")
-    var port: Int = 1337
-
-    private var id: BigInteger = BigInteger.ONE
+    private var id: BigInteger? = null
 
     fun getHost(): String {
         return host
     }
 
+    fun getPort(): Int {
+        return p2p.listeningPort
+    }
+
     fun getAddress(): Address {
-        return Address(host, port)
+        return Address(host, p2p.listeningPort)
     }
 
     fun getKAddress(): KAddress {
@@ -31,7 +35,7 @@ class IdentityService {
     }
 
     fun getId(): BigInteger {
-        if (id == BigInteger.ONE) {
+        if (id == null) {
             // Now generates random sha256 as id
             val md = MessageDigest.getInstance("SHA-256")
             val random = SecureRandom()
@@ -41,6 +45,6 @@ class IdentityService {
             id = BigInteger(digest)
         }
 
-        return id
+        return id!!
     }
 }

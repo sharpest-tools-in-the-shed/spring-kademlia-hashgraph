@@ -1,5 +1,6 @@
 package net.stits.kademlia.controllers
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import net.stits.kademlia.data.KAddress
 import net.stits.kademlia.services.DiscoveryService
 import net.stits.kademlia.services.IdentityService
@@ -12,6 +13,15 @@ import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
+
+data class BootstrapReq(
+        @JsonProperty("host") val host: String,
+        @JsonProperty("port") val port: Int
+)
+
+data class StoreReq(
+        @JsonProperty("value") val value: String
+)
 
 @RestController
 class KademliaControllerWeb {
@@ -28,44 +38,56 @@ class KademliaControllerWeb {
     lateinit var kademliaService: KademliaService
 
 
-    @GetMapping("/addresses/list")
+    @GetMapping("/address/me")
+    fun getMyAddress(): KAddress {
+        return identityService.getKAddress()
+    }
+
+    @GetMapping("/address/list")
     fun getAddressBook(): List<KAddress> {
         return discoveryService.toList()
     }
 
     @GetMapping("/ping/{id}")
-    fun ping(@PathVariable id: String): Boolean {
+    fun ping(@PathVariable id: String): String {
         val _id = BigInteger(id)
 
         return kademliaService.ping(_id)
     }
 
     @PostMapping("/bootstrap")
-    fun bootstrap(@RequestParam host: String, @RequestParam port: Int): String {
-        kademliaService.bootstrap(Address(host, port), identityService.getId())
+    fun bootstrap(@RequestBody input: BootstrapReq): String {
+        kademliaService.bootstrap(Address(input.host, input.port), identityService.getId())
         return "Ok"
     }
 
     @GetMapping("/storage/list")
-    fun getStorage(): Map<BigInteger, Any> {
-        return storageService.getStorage()
+    fun getStorage(): Map<String, Any> {
+        val storage = storageService.getStorage().mapKeys { it.key.toString(16) }
+
+        return storage
     }
 
-    @PostMapping("/storage/add")
-    fun storeString(@RequestParam value: String): String {
+    @PostMapping("/storage/put")
+    fun storeString(@RequestBody input: StoreReq): String {
         val md = MessageDigest.getInstance("SHA-256")
-        md.update(value.toByteArray(StandardCharsets.UTF_8))
+        md.update(input.value.toByteArray(StandardCharsets.UTF_8))
         val digest = md.digest()
         val id = BigInteger(digest)
 
-        kademliaService.store(id, value)
+        storageService.put(id, input.value)
+        val storedRemotelly = kademliaService.store(id, input.value)
 
-        return "Ok"
+        if (!storedRemotelly)
+            throw RuntimeException("Unable to store value: ${input.value} id: $id (duplicate id)")
+
+        return id.toString(10)
     }
 
     @GetMapping("/storage/{id}")
-    fun getFromStorage(@RequestParam id: String): Any? {
+    fun getFromStorage(@PathVariable id: String): Any? {
         val _id = BigInteger(id)
-        return storageService.get(_id)
+
+        return storageService.get(_id) ?: kademliaService.findValue(_id)
     }
 }

@@ -1,7 +1,5 @@
 package net.stits.kademlia.services
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.KotlinModule
 import net.stits.kademlia.controllers.KademliaMessageTypes
 import net.stits.kademlia.controllers.TOPIC_KADEMLIA_COMMON
 import net.stits.kademlia.data.*
@@ -24,45 +22,36 @@ class KademliaService {
     @Autowired
     lateinit var p2p: P2P
 
-    private val mapper = ObjectMapper().registerModule(KotlinModule())
-    private var bootstrapped = false
-
     fun bootstrap(bootstrapAddress: Address, myId: BigInteger) {
         println("Trying to bootstrap $myId with node $bootstrapAddress")
 
         val request = FindNodeRequest(myId, myId, BigInteger.ZERO)
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_NODE_REQ, request)
 
-        p2p.send(bootstrapAddress, message, identityService.port, _class = FindNodeResponse::class.java)
+        p2p.send(bootstrapAddress, message, identityService.getPort(), _class = FindNodeResponse::class.java)
                 ?: throw RuntimeException("Unable to bootstrap $myId with node $bootstrapAddress")
 
-        bootstrapped = true
-        println("Bootstrap success. Saying about me to others...")
-
         findNode(myId)
-
-        println("Others are notified")
     }
 
-    fun ping(id: BigInteger): Boolean {
+    fun ping(id: BigInteger): String {
         assertBootstrapped()
 
         var nodeAddr = discoveryService.getNodeById(id)
         if (nodeAddr == null) nodeAddr = findNode(id)
-        if (nodeAddr == null) return false
+        if (nodeAddr == null) throw RuntimeException("Unable to find node: $id")
 
-        return sendPing(nodeAddr)
+        if (sendPing(nodeAddr)) return "Ok"
+        throw RuntimeException("Unable to reach node: $nodeAddr")
     }
 
     fun store(id: BigInteger, value: Any): Boolean {
         assertBootstrapped()
 
-        val serializedValue = mapper.writeValueAsBytes(value)
-
         val nodeToStore = findNode(id)
                 ?: throw RuntimeException("Cannot find closest node to id: $id. Maybe your address book is empty?")
 
-        return sendStore(id, serializedValue, nodeToStore).success
+        return sendStore(id, value, nodeToStore).success
     }
 
     fun findNode(id: BigInteger): KAddress? {
@@ -75,23 +64,24 @@ class KademliaService {
         val nodesToAsk = discoveryService.getClosestKBucket(id)
         if (nodesToAsk.isEmpty()) return null
 
-        return nodesToAsk.map { askForNodeRecursive(id, it) }.find { it != null } ?: discoveryService.getClosest(id)
+        return nodesToAsk.map { askForNodeRecursive(id, it) }.find { it != null }
+                ?: discoveryService.getClosest(id)
     }
 
-    fun <T> findValue(id: BigInteger, _class: Class<T>): T? {
+    fun findValue(id: BigInteger): Any? {
         assertBootstrapped()
 
         val nodesToAsk = discoveryService.getClosestKBucket(id)
         if (nodesToAsk.isEmpty()) return null
 
-        val value = nodesToAsk.map { askForValueRecursive(id, it) }.find { it != null }
-
-        return if (value == null) null
-        else mapper.readValue(value, _class)
+        return nodesToAsk.map { askForValueRecursive(id, it) }.find { it != null }
     }
 
     private fun assertBootstrapped() {
-        assert(bootstrapped) { "Unable to do any actions before bootstrap." }
+        assert(
+                discoveryService.addressBook != null
+                        && discoveryService.addressBook!!.getFlat().isNotEmpty()
+        ) { "Unable to do any actions before bootstrap." }
     }
 
     private fun askForNodeRecursive(id: BigInteger, node: KAddress): KAddress? {
@@ -105,7 +95,7 @@ class KademliaService {
                 ?: notAskedNodes.map { askForNodeRecursive(id, it) }.find { it != null }
     }
 
-    private fun askForValueRecursive(id: BigInteger, node: KAddress): ByteArray? {
+    private fun askForValueRecursive(id: BigInteger, node: KAddress): Any? {
         val response = sendFindValue(id, node)
         if (response.value != null) return response.value
         if (response.nodesToAsk == null || response.nodesToAsk.isEmpty()) return null
@@ -119,15 +109,15 @@ class KademliaService {
         val payload = DefaultPayload(identityService.getId(), to.getId())
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.PING, payload)
 
-        val result = p2p.send(to.getAddress(), message, identityService.port, _class = Boolean::class.java)
-        return result != null
+        val result = p2p.send(to.getAddress(), message, identityService.getPort(), _class = String::class.java)
+        return result == "true"
     }
 
     private fun sendFindNode(id: BigInteger, to: KAddress): FindNodeResponse {
         val payload = FindNodeRequest(id, identityService.getId(), to.getId())
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_NODE_REQ, payload)
 
-        val result = p2p.send(to.getAddress(), message, identityService.port, _class = FindNodeResponse::class.java)
+        val result = p2p.send(to.getAddress(), message, identityService.getPort(), _class = FindNodeResponse::class.java)
                 ?: throw RuntimeException("Unable to receive closest nodes for id: $id from node $to")
 
         return result as FindNodeResponse
@@ -137,17 +127,17 @@ class KademliaService {
         val payload = FindValueRequest(id, identityService.getId(), to.getId())
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_VALUE_REQ, payload)
 
-        val result = p2p.send(to.getAddress(), message, identityService.port, _class = FindValueResponse::class.java)
+        val result = p2p.send(to.getAddress(), message, identityService.getPort(), _class = FindValueResponse::class.java)
                 ?: throw RuntimeException("Unable to get value of id: $id from node: $to")
 
         return result as FindValueResponse
     }
 
-    private fun sendStore(id: BigInteger, value: ByteArray, to: KAddress): StoreResponse {
+    private fun sendStore(id: BigInteger, value: Any, to: KAddress): StoreResponse {
         val payload = StoreRequest(id, value, identityService.getId(), to.getId())
         val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.STORE_REQ, payload)
 
-        val result = p2p.send(to.getAddress(), message, identityService.port, _class = StoreResponse::class.java)
+        val result = p2p.send(to.getAddress(), message, identityService.getPort(), _class = StoreResponse::class.java)
                 ?: throw RuntimeException("Unable to store value of id: $id on node: $to")
 
         return result as StoreResponse
