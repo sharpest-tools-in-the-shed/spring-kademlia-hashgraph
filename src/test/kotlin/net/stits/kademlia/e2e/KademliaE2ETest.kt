@@ -137,6 +137,7 @@ class KademliaE2ETest {
                             idsToValues
                                     .map { (id, value) ->
                                         val retrievedVal = client.getFromStorage(id)
+                                        if (retrievedVal != value) println("retrieved: $retrievedVal, value: $value")
                                         retrievedVal == value
                                     }
                                     .all { equals -> equals }

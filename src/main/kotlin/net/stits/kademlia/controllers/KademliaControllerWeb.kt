@@ -76,9 +76,9 @@ class KademliaControllerWeb {
         val id = BigInteger(digest)
 
         storageService.put(id, input.value)
-        val storedRemotelly = kademliaService.store(id, input.value)
+        val storedRemotely = kademliaService.store(id, input.value)
 
-        if (!storedRemotelly)
+        if (!storedRemotely)
             throw RuntimeException("Unable to store value: ${input.value} id: $id (duplicate id)")
 
         return id.toString(10)

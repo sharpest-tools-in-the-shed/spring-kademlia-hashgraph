@@ -1,5 +1,6 @@
 package net.stits.kademlia.services
 
+import kotlinx.coroutines.experimental.runBlocking
 import net.stits.kademlia.controllers.KademliaMessageTypes
 import net.stits.kademlia.controllers.TOPIC_KADEMLIA_COMMON
 import net.stits.kademlia.data.*
@@ -22,16 +23,19 @@ class KademliaService {
     @Autowired
     lateinit var p2p: P2P
 
+    private val timeout = 10000L
+
     fun bootstrap(bootstrapAddress: Address, myId: BigInteger) {
-        println("Trying to bootstrap $myId with node $bootstrapAddress")
+        runBlocking {
+            println("Trying to bootstrap $myId with node $bootstrapAddress")
 
-        val request = FindNodeRequest(myId, myId, BigInteger.ZERO)
-        val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_NODE_REQ, request)
+            p2p.requestFromTimeouted<FindNodeResponse>(bootstrapAddress, timeout) {
+                val request = FindNodeRequest(myId, myId, BigInteger.ZERO)
+                Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_NODE, request)
+            } ?: throw RuntimeException("Unable to bootstrap $myId with node $bootstrapAddress")
 
-        p2p.send(bootstrapAddress, message, identityService.getPort(), _class = FindNodeResponse::class.java)
-                ?: throw RuntimeException("Unable to bootstrap $myId with node $bootstrapAddress")
-
-        findNode(myId)
+            findNode(myId)
+        }
     }
 
     fun ping(id: BigInteger): String {
@@ -105,41 +109,32 @@ class KademliaService {
         return notAskedNodes.map { askForValueRecursive(id, it) }.find { it != null }
     }
 
-    private fun sendPing(to: KAddress): Boolean {
-        val payload = DefaultPayload(identityService.getId(), to.getId())
-        val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.PING, payload)
-
-        val result = p2p.send(to.getAddress(), message, identityService.getPort(), _class = String::class.java)
-        return result == "true"
+    private fun sendPing(to: KAddress): Boolean = runBlocking {
+        p2p.requestFromTimeouted(to.getAddress(), timeout) {
+            val payload = DefaultPayload(identityService.getId(), to.getId())
+            Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.PING, payload)
+        } ?: false
     }
 
-    private fun sendFindNode(id: BigInteger, to: KAddress): FindNodeResponse {
-        val payload = FindNodeRequest(id, identityService.getId(), to.getId())
-        val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_NODE_REQ, payload)
+    private fun sendFindNode(id: BigInteger, to: KAddress) = runBlocking {
+        p2p.requestFromTimeouted<FindNodeResponse>(to.getAddress(), timeout) {
+            val payload = FindNodeRequest(id, identityService.getId(), to.getId())
+            Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_NODE, payload)
 
-        val result = p2p.send(to.getAddress(), message, identityService.getPort(), _class = FindNodeResponse::class.java)
-                ?: throw RuntimeException("Unable to receive closest nodes for id: $id from node $to")
-
-        return result as FindNodeResponse
+        } ?: throw RuntimeException("Unable to receive closest nodes for id: $id from node $to")
     }
 
-    private fun sendFindValue(id: BigInteger, to: KAddress): FindValueResponse {
-        val payload = FindValueRequest(id, identityService.getId(), to.getId())
-        val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_VALUE_REQ, payload)
-
-        val result = p2p.send(to.getAddress(), message, identityService.getPort(), _class = FindValueResponse::class.java)
-                ?: throw RuntimeException("Unable to get value of id: $id from node: $to")
-
-        return result as FindValueResponse
+    private fun sendFindValue(id: BigInteger, to: KAddress) = runBlocking {
+        p2p.requestFromTimeouted<FindValueResponse>(to.getAddress(), timeout) {
+            val payload = FindValueRequest(id, identityService.getId(), to.getId())
+            Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.FIND_VALUE, payload)
+        } ?: throw RuntimeException("Unable to get value of id: $id from node: $to")
     }
 
-    private fun sendStore(id: BigInteger, value: Any, to: KAddress): StoreResponse {
-        val payload = StoreRequest(id, value, identityService.getId(), to.getId())
-        val message = Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.STORE_REQ, payload)
-
-        val result = p2p.send(to.getAddress(), message, identityService.getPort(), _class = StoreResponse::class.java)
-                ?: throw RuntimeException("Unable to store value of id: $id on node: $to")
-
-        return result as StoreResponse
+    private fun sendStore(id: BigInteger, value: Any, to: KAddress) = runBlocking {
+        p2p.requestFromTimeouted<StoreResponse>(to.getAddress(), timeout) {
+            val payload = StoreRequest(id, value, identityService.getId(), to.getId())
+            Message(TOPIC_KADEMLIA_COMMON, KademliaMessageTypes.STORE, payload)
+        } ?: throw RuntimeException("Unable to store value of id: $id on node: $to")
     }
 }

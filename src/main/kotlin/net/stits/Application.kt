@@ -4,7 +4,6 @@ import net.stits.osen.P2P
 import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.context.annotation.Bean
-import org.springframework.core.env.Environment
 
 
 val K_PARAMETER = 2
@@ -15,8 +14,8 @@ open class Application {
     private val packageToScan = Application::class.java.`package`.name
 
     @Bean
-    open fun p2pInitializer(env: Environment): P2P {
-        return P2P(packageToScan = packageToScan)
+    open fun p2pInitializer(): P2P {
+        return P2P(basePackages = arrayOf(packageToScan))
     }
 }
 
