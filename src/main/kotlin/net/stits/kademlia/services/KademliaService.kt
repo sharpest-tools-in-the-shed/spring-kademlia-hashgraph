@@ -7,9 +7,11 @@ import net.stits.kademlia.data.*
 import net.stits.osen.Address
 import net.stits.osen.Message
 import net.stits.osen.P2P
+import net.stits.osen.SerializationUtils
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
 import java.math.BigInteger
+import javax.annotation.PostConstruct
 
 
 @Service
@@ -24,6 +26,18 @@ class KademliaService {
     lateinit var p2p: P2P
 
     private val timeout = 10000L
+
+    @PostConstruct
+    fun init() {
+        p2p.setBeforePackageSent { pack ->
+            val additionalMetadata = KademliaAdditionalMetadata.create(pack) { identityService.getKeyPair() }
+            pack.metadata.additionalMetadata = SerializationUtils.anyToBytes(additionalMetadata)
+        }
+
+        p2p.setAfterPackageReceived { pack ->
+            require(KademliaAdditionalMetadata.verify(pack)) { "Package verification failed" }
+        }
+    }
 
     fun bootstrap(bootstrapAddress: Address, myId: BigInteger) {
         runBlocking {

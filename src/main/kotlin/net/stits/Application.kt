@@ -15,7 +15,7 @@ open class Application {
 
     @Bean
     open fun p2pInitializer(): P2P {
-        return P2P(basePackages = arrayOf(packageToScan))
+        return P2P(basePackages = arrayOf(packageToScan), maxPacketSizeBytes = 10 * 1024)
     }
 }
 

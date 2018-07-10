@@ -68,10 +68,22 @@ class Hashgraph {
     fun addEvent(event: HashgraphEvent) {
         if (vertices.containsKey(event.hash)) return
 
+        require(
+                event.selfParent != null
+                        && event.otherParent != null
+                        && !vertices.containsKey(event.selfParent)
+                        && !vertices.containsKey(event.otherParent)
+        ) { "Unable to add event which parents are not in graph" }
+
         if (heads[event.issuerId]?.hash != event.hash) {
             heads[event.issuerId] = event // updating heads
             vertices[event.hash] = event // adding to graph
         }
+    }
+
+    fun getEvent(id: BigInteger): HashgraphEvent? {
+        return if (!vertices.containsKey(id)) null
+        else vertices[id]
     }
 
     fun getSelfParents(event: HashgraphEvent, count: Int = 0): List<HashgraphEvent> {
@@ -87,5 +99,21 @@ class Hashgraph {
 
         return if (count > 0) parents.take(count)
         else parents
+    }
+
+    fun getSubgraphRecursiveStartFrom(event: HashgraphEvent, parents: MutableList<HashgraphEvent> = mutableListOf()): List<HashgraphEvent> {
+        if (event.selfParent != null)
+            getSubgraphRecursiveStartFrom(
+                    getEvent(event.selfParent)!!,
+                    parents
+            )
+        if (event.otherParent != null)
+            getSubgraphRecursiveStartFrom(
+                    getEvent(event.otherParent)!!,
+                    parents
+            )
+
+        parents.add(event)
+        return parents
     }
 }
