@@ -30,7 +30,7 @@ class CryptoUtilsTest {
 
         assert(signature.isNotEmpty()) { "signature is empty" }
 
-        val verified = CryptoUtils.verifySignature(
+        val verified = CryptoUtils.verify(
                 signature,
                 dataSlice1.toByteArray(StandardCharsets.UTF_8),
                 dataSlice2.toBigInteger().toByteArray()
@@ -38,6 +38,16 @@ class CryptoUtilsTest {
         ) { keyPair.public }
 
         assert(verified) { "signature is not verified" }
+    }
+
+    @Test
+    fun `public key to bigint translation work properly`() {
+        val keyPair = CryptoUtils.generateECDSAKeyPair()
+
+        val publicKeyTranslated = CryptoUtils.publicKeyToId(keyPair.public)
+        val publicKeyDetranslated = CryptoUtils.idToPublicKey(publicKeyTranslated)
+
+        assert(publicKeyDetranslated == keyPair.public)
     }
 
     @Test

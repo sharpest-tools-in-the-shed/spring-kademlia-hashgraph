@@ -33,7 +33,7 @@ data class StoreResponse(val id: BigInteger, val success: Boolean, override val 
 
 
 // TODO: somehow find a way to always know sender id
-data class KademliaAdditionalMetadata(val hash: ByteArray, val signature: ByteArray, val senderId: BigInteger) {
+data class KademliaAdditionalMetadata(val signature: ByteArray, val senderId: BigInteger) {
     companion object {
         fun create(pack: Package, provideKeyPair: () -> KeyPair): KademliaAdditionalMetadata {
             val serializedPort = SerializationUtils.anyToBytes(pack.metadata.port)
@@ -44,7 +44,7 @@ data class KademliaAdditionalMetadata(val hash: ByteArray, val signature: ByteAr
             val hash = CryptoUtils.hash(serializedPort, serializedSession, serializedMessage)
             val signature = CryptoUtils.sign(serializedPort, serializedSession, serializedMessage, hash) { keyPair.private }
 
-            return KademliaAdditionalMetadata(hash, signature, CryptoUtils.publicKeyToId(keyPair.public))
+            return KademliaAdditionalMetadata(signature, CryptoUtils.publicKeyToId(keyPair.public))
         }
 
         fun verify(pack: Package): Boolean {
@@ -52,27 +52,12 @@ data class KademliaAdditionalMetadata(val hash: ByteArray, val signature: ByteAr
             check(serializedAdditionalMetadata != null) { "Additional metadata is empty. Cannot verify." }
 
             val additionalMetadata = SerializationUtils.bytesToAny<KademliaAdditionalMetadata>(serializedAdditionalMetadata!!)!!
-            val serializedPort = SerializationUtils.anyToBytes(pack.metadata.port)
-            val serializedSession = SerializationUtils.anyToBytes(pack.metadata.session)
-            val serializedMessage = SerializationUtils.anyToBytes(pack.message)
 
-            val integrityCheckPassed = CryptoUtils.verifyIntegrity(
-                    serializedPort,
-                    serializedSession,
-                    serializedMessage
-            ) { additionalMetadata.hash }
-
-            if (!integrityCheckPassed) {
-                Package.logger.warning("Package was modified. Integrity check fail.")
-                return false
-            }
-
-            val signatureCheckPassed = CryptoUtils.verifySignature(
+            val signatureCheckPassed = CryptoUtils.verify(
                     additionalMetadata.signature,
                     SerializationUtils.anyToBytes(pack.metadata.port),
                     SerializationUtils.anyToBytes(pack.metadata.session),
-                    SerializationUtils.anyToBytes(pack.message),
-                    additionalMetadata.hash
+                    SerializationUtils.anyToBytes(pack.message)
             ) { CryptoUtils.idToPublicKey(additionalMetadata.senderId) }
 
             if (!signatureCheckPassed) Package.logger.warning("Signatures don't match. Signature check fail.")
@@ -86,15 +71,15 @@ data class KademliaAdditionalMetadata(val hash: ByteArray, val signature: ByteAr
 
         other as KademliaAdditionalMetadata
 
-        if (!Arrays.equals(hash, other.hash)) return false
         if (!Arrays.equals(signature, other.signature)) return false
+        if (senderId != other.senderId) return false
 
         return true
     }
 
     override fun hashCode(): Int {
-        var result = Arrays.hashCode(hash)
-        result = 31 * result + Arrays.hashCode(signature)
+        var result = Arrays.hashCode(signature)
+        result = 31 * result + senderId.hashCode()
         return result
     }
 }

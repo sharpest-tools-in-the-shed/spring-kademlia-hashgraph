@@ -3,7 +3,6 @@ package net.stits.utils
 import java.math.BigInteger
 import java.security.*
 import java.security.spec.X509EncodedKeySpec
-import java.util.*
 
 
 const val KEY_GENERATION_ALGORITHM = "EC"
@@ -12,6 +11,8 @@ const val HASH_ALGORITHM = "SHA-256"
 
 /**
  * This static class provides interface to some primitive cryptographic functions
+ *
+ * TODO: maybe add public key to signature and hash?
  */
 class CryptoUtils {
     companion object {
@@ -23,11 +24,11 @@ class CryptoUtils {
         /**
          * Creates signature of specified data with provided private key
          */
-        fun sign(vararg data: ByteArray, providePrivateKey: () -> PrivateKey): ByteArray {
+        fun sign(vararg data: ByteArray?, providePrivateKey: () -> PrivateKey): ByteArray {
             val signatureGenerator = Signature.getInstance(SIGNATURE_ALGORITHM)
             signatureGenerator.initSign(providePrivateKey())
 
-            data.forEach { signatureGenerator.update(it) }
+            data.forEach { if (it != null) signatureGenerator.update(it) }
 
             return signatureGenerator.sign()
         }
@@ -35,32 +36,22 @@ class CryptoUtils {
         /**
          * Verifies if specified signature of specified data is created by specified public key
          */
-        fun verifySignature(signature: ByteArray, vararg data: ByteArray, providePublicKey: () -> PublicKey): Boolean {
+        fun verify(signature: ByteArray, vararg data: ByteArray?, providePublicKey: () -> PublicKey): Boolean {
             val signatureGenerator = Signature.getInstance(SIGNATURE_ALGORITHM)
             signatureGenerator.initVerify(providePublicKey())
 
-            data.forEach { signatureGenerator.update(it) }
+            data.forEach { if (it != null) signatureGenerator.update(it) }
 
             return signatureGenerator.verify(signature)
         }
 
         /**
-         * Verifies if specified data has provided hash
-         */
-        fun verifyIntegrity(vararg data: ByteArray, provideHash: () -> ByteArray): Boolean {
-            val newHash = hash(*data)
-            val oldHash = provideHash()
-
-            return (Arrays.equals(oldHash, newHash))
-        }
-
-        /**
          * Creates digest of specified data
          */
-        fun hash(vararg data: ByteArray): ByteArray {
+        fun hash(vararg data: ByteArray?): ByteArray {
             val md = MessageDigest.getInstance(HASH_ALGORITHM)
 
-            data.forEach { md.update(it) }
+            data.forEach { if (it != null) md.update(it) }
 
             return md.digest()
         }
