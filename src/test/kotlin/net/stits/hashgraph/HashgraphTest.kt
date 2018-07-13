@@ -31,27 +31,31 @@ class HashgraphTest {
 
         val eventBuilder = HashgraphEventBuilder()
 
-        participants.forEach {
-            val event = eventBuilder.buildFirstInHistory(it)
+        for (i in 1..eventCount) {
+            val (selfParent, otherParent) = hg.randomParentsOrNull()
+
+            eventBuilder
+                    .withSeflParent(selfParent)
+                    .withOtherParent(otherParent)
+
+            val containsTransaction = choice()
+            if (containsTransaction) {
+                val (selfTransactionParent, otherTransactionParent) = hg.randomTransactionParentsOrNull()
+                eventBuilder
+                        .withTransaction(HashgraphTransaction("test", "test"))
+                        .withSelfTransactionParent(selfTransactionParent)
+                        .withOtherTransactionParent(otherTransactionParent)
+            }
+
+            val event = eventBuilder.build(participants.randomOrNull()!!)
 
             hg.addEvent(event)
         }
 
-        for (i in 1..eventCount) {
-            val randomSelfParent = hg.heads.values.map { it.hash() }.randomOrNull()!!
-            val randomOtherParent = hg.heads.values.map { it.hash() }.filter { !Arrays.equals(it, randomSelfParent) }.randomOrNull()!!
-
-            val event = eventBuilder
-                    .withSeflParent(randomSelfParent)
-                    .withOtherParent(randomOtherParent)
-
-            val containsTransaction = choice()
-
-            if (containsTransaction) {
-                val randomSelfTransactionParent = hg.headsWithTransaction.values
-                event.withTransaction(HashgraphTransaction("test", "test"))
-            }
-        }
+        assert(hg.heads.size == PARTICIPANT_COUNT)
+        assert(hg.headsWithTransaction.size == PARTICIPANT_COUNT)
+        assert(hg.headsWithTransaction.values.all { it.event.containsTransaction() })
+        assert(hg.vertices.size == eventCount)
     }
 
     private fun createParticipants(count: Int): List<KeyPair> {
@@ -64,3 +68,47 @@ class HashgraphTest {
 
 fun <E> List<E>.randomOrNull(): E? = if (isNotEmpty()) get(Random().nextInt(size)) else null
 fun choice(): Boolean = Random().nextBoolean()
+
+fun Hashgraph.randomParentsOrNull(): Parents {
+    if (heads.keys.isEmpty()) return Parents(HashgraphEvent.NO_PARENT, HashgraphEvent.NO_PARENT)
+
+    val randomSelfParent = heads.values.map { it.hash() }.randomOrNull()!!
+
+    if (heads.keys.size == 1) return Parents(HashgraphEvent.NO_PARENT, randomSelfParent)
+
+    val randomOtherParent = heads.values.map { it.hash() }.filter { !Arrays.equals(it, randomSelfParent) }.randomOrNull()!!
+
+    return Parents(randomSelfParent, randomOtherParent)
+}
+
+fun Hashgraph.randomTransactionParentsOrNull(): Parents {
+    if (headsWithTransaction.keys.isEmpty()) return Parents(HashgraphEvent.NO_PARENT, HashgraphEvent.NO_PARENT)
+
+    val randomSelfParent = headsWithTransaction.values.map { it.hash() }.randomOrNull()!!
+
+    if (headsWithTransaction.keys.size == 1) return Parents(HashgraphEvent.NO_PARENT, randomSelfParent)
+
+    val randomOtherParent = headsWithTransaction.values.map { it.hash() }.filter { !Arrays.equals(it, randomSelfParent) }.randomOrNull()!!
+
+    return Parents(randomSelfParent, randomOtherParent)
+}
+
+data class Parents(val self: ByteArray, val other: ByteArray) {
+    override fun equals(b: Any?): Boolean {
+        if (this === b) return true
+        if (javaClass != b?.javaClass) return false
+
+        b as Parents
+
+        if (!Arrays.equals(self, b.self)) return false
+        if (!Arrays.equals(other, b.other)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = Arrays.hashCode(self)
+        result = 31 * result + Arrays.hashCode(other)
+        return result
+    }
+}
