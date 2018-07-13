@@ -31,6 +31,12 @@ class HashgraphTest {
 
         val eventBuilder = HashgraphEventBuilder()
 
+        participants.forEach {
+            val event = HashgraphEventBuilder().buildFirstInHistory(it)
+
+            hg.addEvent(event)
+        }
+
         for (i in 1..eventCount) {
             val (selfParent, otherParent) = hg.randomParentsOrNull()
 
@@ -72,11 +78,14 @@ fun choice(): Boolean = Random().nextBoolean()
 fun Hashgraph.randomParentsOrNull(): Parents {
     if (heads.keys.isEmpty()) return Parents(HashgraphEvent.NO_PARENT, HashgraphEvent.NO_PARENT)
 
-    val randomSelfParent = heads.values.map { it.hash() }.randomOrNull()!!
+    val randomSelfParent = heads.values.map { it.event.hash() }.randomOrNull()!!
 
     if (heads.keys.size == 1) return Parents(HashgraphEvent.NO_PARENT, randomSelfParent)
 
-    val randomOtherParent = heads.values.map { it.hash() }.filter { !Arrays.equals(it, randomSelfParent) }.randomOrNull()!!
+    val randomOtherParent = heads.values
+            .map { it.event.hash() }
+            .filter { !it.contentEquals(randomSelfParent) }
+            .randomOrNull()!!
 
     return Parents(randomSelfParent, randomOtherParent)
 }
@@ -84,11 +93,11 @@ fun Hashgraph.randomParentsOrNull(): Parents {
 fun Hashgraph.randomTransactionParentsOrNull(): Parents {
     if (headsWithTransaction.keys.isEmpty()) return Parents(HashgraphEvent.NO_PARENT, HashgraphEvent.NO_PARENT)
 
-    val randomSelfParent = headsWithTransaction.values.map { it.hash() }.randomOrNull()!!
+    val randomSelfParent = headsWithTransaction.values.map { it.event.hash() }.randomOrNull()!!
 
     if (headsWithTransaction.keys.size == 1) return Parents(HashgraphEvent.NO_PARENT, randomSelfParent)
 
-    val randomOtherParent = headsWithTransaction.values.map { it.hash() }.filter { !Arrays.equals(it, randomSelfParent) }.randomOrNull()!!
+    val randomOtherParent = headsWithTransaction.values.map { it.event.hash() }.filter { !Arrays.equals(it, randomSelfParent) }.randomOrNull()!!
 
     return Parents(randomSelfParent, randomOtherParent)
 }

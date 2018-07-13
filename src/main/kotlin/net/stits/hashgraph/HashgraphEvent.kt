@@ -145,7 +145,9 @@ data class HashgraphEventData(
         var isWitness: Boolean = false,
         var round: BigInteger = BigInteger.ZERO,
         var famous: Boolean = false,
-        var vote: Boolean = false
+        var vote: Boolean = false,
+        var roundReceived: BigInteger = BigInteger.ZERO,
+        var consensusTimestamp: Long = 0L
 )
 
 data class HashgraphEvent(
@@ -188,12 +190,17 @@ data class HashgraphEvent(
         return transactions != null && transactions.isNotEmpty()
     }
 
-    fun hasSelfParent(): Boolean {
-        return !this.selfParent.contentEquals(HashgraphEvent.NO_PARENT)
+    fun hasParents(): Boolean {
+        return !this.selfParent.contentEquals(HashgraphEvent.NO_PARENT) && !this.otherParent.contentEquals(HashgraphEvent.NO_PARENT)
     }
 
-    fun hasOtherParent(): Boolean {
-        return !this.otherParent.contentEquals(HashgraphEvent.NO_PARENT)
+    fun hasTransactionParents(): Boolean {
+        if (this.selfTransactionParent == null) return false
+        if (this.otherTransactionParent == null) return false
+        if (this.selfTransactionParent.contentEquals(HashgraphEvent.NO_PARENT)) return false
+        if (this.otherTransactionParent.contentEquals(HashgraphEvent.NO_PARENT)) return false
+
+        return true
     }
 
     fun hash(): ByteArray {
@@ -203,7 +210,9 @@ data class HashgraphEvent(
                 otherParent,
                 selfTransactionParent,
                 otherTransactionParent,
-                serializedTransactions
+                serializedTransactions,
+                signature,
+                signerPublicKey.encoded
         )
 
         return CryptoUtils.hash(*fieldsToTakeIntoAccount)
@@ -244,15 +253,40 @@ data class HashgraphEvent(
     }
 }
 
+data class Vote(val from: ByteArray, val vote: Boolean) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as Vote
+
+        if (!Arrays.equals(from, other.from)) return false
+        if (vote != other.vote) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = Arrays.hashCode(from)
+        result = 31 * result + vote.hashCode()
+        return result
+    }
+}
+
+// TODO: add caching
 class Hashgraph {
     // graph itself [Event hash -> Event]
-    val vertices = hashMapOf<ByteArray, HashgraphEventData>()
+    val vertices = hashMapOf<BigInteger, HashgraphEventData>()
     // heads of graph [Issuer ID -> Event]
     val heads = hashMapOf<BigInteger, HashgraphEventData>()
     // heads of graph but containing transactions [Issuer ID -> Event with transaction]
     val headsWithTransaction = hashMapOf<BigInteger, HashgraphEventData>()
-
+    // witnesses of each round
+    val witnessesOfRounds = hashMapOf<BigInteger, MutableList<HashgraphEventData>>()
+    // every this round is a coin round
     val coinRoundRate = BigInteger("10")
+    // votes for each witness by each of other witnesses, that should vote
+    val votes = hashMapOf<BigInteger, MutableList<Vote>>()
 
     companion object {
         private val logger = loggerFor<Hashgraph>()
@@ -260,33 +294,65 @@ class Hashgraph {
 
     fun addEvent(event: HashgraphEvent) {
         val hash = event.hash()
-        if (vertices.containsKey(hash)) {
+        val bigIntHash = BigInteger(hash)
+        if (vertices.containsKey(bigIntHash)) {
             logger.warning("Hashgraph is already contains event: $hash")
             return
         }
 
-        require(
-                !vertices.containsKey(event.selfParent) && !vertices.containsKey(event.otherParent)
-        ) { "Unable to add event which parents are not in graph" }
+        // TODO: add to temporary container and commit at every sync
+        require(!containsEvent(event.selfParent) && !containsEvent(event.otherParent))
+        { "Unable to add event which parents are not in graph" }
 
         val issuerId = event.issuerId()
 
         // prevent forks
-        require(event.selfParent.contentEquals(heads[issuerId]!!.event.hash()))
+/*        require((!event.hasParents() && heads[issuerId] == null) || (event.selfParent.contentEquals(heads[issuerId]!!.event.hash())))
         if (event.containsTransaction())
-            require(event.selfTransactionParent!!.contentEquals(headsWithTransaction[issuerId]!!.event.hash()))
+            require((!event.hasTransactionParents() && headsWithTransaction[issuerId] == null)
+                    || (event.selfTransactionParent!!.contentEquals(headsWithTransaction[issuerId]!!.event.hash())))*/
 
         val eventData = HashgraphEventData(event)
 
+        divideRounds(eventData)
+        decideFameBy(eventData)
+        findOrderOf(eventData.round)
+
         heads[issuerId] = eventData // updating heads
-        vertices[hash] = eventData // adding to graph
+        vertices[bigIntHash] = eventData // adding to graph
 
         if (event.containsTransaction())
             headsWithTransaction[issuerId] = eventData
     }
 
+    fun containsEvent(hash: ByteArray): Boolean {
+        val bigIntHash = BigInteger(hash)
+        return vertices.containsKey(bigIntHash)
+    }
+
     fun getEventData(hash: ByteArray): HashgraphEventData? {
-        return vertices[hash]
+        val bigIntHash = BigInteger(hash)
+        return vertices[bigIntHash]
+    }
+
+    fun getWitnessesOf(round: BigInteger): List<HashgraphEventData> {
+        return witnessesOfRounds[round] ?: listOf()
+    }
+
+    fun addWitness(witness: HashgraphEventData) {
+        if (!witness.isWitness) {
+            logger.warning("Event $witness is not a witness!")
+            return
+        }
+
+        if (witnessesOfRounds[witness.round] == null)
+            witnessesOfRounds[witness.round] = mutableListOf(witness)
+
+        witnessesOfRounds[witness.round]!!.add(witness)
+    }
+
+    fun getEventDatas(round: BigInteger): List<HashgraphEventData> {
+        return vertices.values.filter { it.round == round }
     }
 
     fun getLastEventDataBy(id: BigInteger): HashgraphEventData? {
@@ -300,30 +366,24 @@ class Hashgraph {
     // true if target can reach possibleAncestor by following 0 or more parent edges
     fun isAncestor(target: HashgraphEventData, possibleAncestor: HashgraphEventData): Boolean {
         if (target == possibleAncestor) return true
+        if (!target.event.hasParents()) return false
 
-        if (target.event.hasSelfParent()) {
-            val parent = getEventData(target.event.selfParent)!!
-            return isAncestor(parent, possibleAncestor)
-        }
+        val selfParent = getEventData(target.event.selfParent)!!
+        val selfParentPathResult = isAncestor(selfParent, possibleAncestor)
 
-        if (target.event.hasOtherParent()) {
-            val parent = getEventData(target.event.otherParent)!!
-            return isAncestor(parent, possibleAncestor)
-        }
+        if (selfParentPathResult) return true
 
-        return false
+        val otherParent = getEventData(target.event.otherParent)!!
+        return isAncestor(otherParent, possibleAncestor)
     }
 
     // true if target can reach possibleAncestor by following 0 or more selfParent edges
     fun isSelfAncestor(target: HashgraphEventData, possibleAncestor: HashgraphEventData): Boolean {
         if (target == possibleAncestor) return true
+        if (!target.event.hasParents()) return false
 
-        if (target.event.hasSelfParent()) {
-            val parent = getEventData(target.event.selfParent)!!
-            return isSelfAncestor(parent, possibleAncestor)
-        }
-
-        return false
+        val parent = getEventData(target.event.selfParent)!!
+        return isSelfAncestor(parent, possibleAncestor)
     }
 
     // true if I can see that event had place
@@ -333,7 +393,21 @@ class Hashgraph {
     fun canStronglySee(watcher: HashgraphEventData, target: HashgraphEventData): Boolean {
         if (!canSee(watcher, target)) return false
 
-        return vertices.values
+        val eventsToCheck = mutableListOf<HashgraphEventData>()
+
+        var roundToAdd = watcher.round
+        while (true) {
+            eventsToCheck.addAll(getEventDatas(roundToAdd))
+
+            if (roundToAdd > target.round)
+                roundToAdd -= BigInteger.ONE
+            else if (roundToAdd > target.round)
+                roundToAdd += BigInteger.ONE
+            else
+                break
+        }
+
+        return eventsToCheck
                 .filter { canSee(it, target) }
                 .filter { canSee(watcher, it) }
                 .map { it.event.issuerId() }
@@ -343,91 +417,140 @@ class Hashgraph {
 
     // assigns round number to every eventdata
     fun divideRounds(target: HashgraphEventData) {
-        val hasSelfParent = target.event.hasSelfParent()
-        val hasOtherParent = target.event.hasOtherParent()
-
-        if (hasSelfParent) {
-            val parent = getEventData(target.event.selfParent)!!
-            divideRounds(parent)
-        }
-
-        if (hasOtherParent) {
-            val parent = getEventData(target.event.otherParent)!!
-            divideRounds(parent)
-        }
-
-        if (hasSelfParent && hasOtherParent) {
+        if (target.event.hasParents()) {
             val selfParent = getEventData(target.event.selfParent)!!
             val otherParent = getEventData(target.event.otherParent)!!
 
             // round = max of parents rounds
             val round = if (selfParent.round > otherParent.round) selfParent.round else otherParent.round
 
-            val allWitnessesOfRound = vertices.values.filter { it.round == round && it.isWitness }
+            val allWitnessesOfRound = getWitnessesOf(round)
             val nextRound = allWitnessesOfRound.map { canStronglySee(target, it) }.count { it } > getSupermajorityOf(allWitnessesOfRound)
 
             if (nextRound) target.round = round + BigInteger.ONE
             else target.round = round
 
             target.isWitness = target.round > selfParent.round
-        }
 
-        if (!hasSelfParent && !hasOtherParent) {
+        } else {
             target.round = BigInteger.ONE
             target.isWitness = true
         }
+
+        if (target.isWitness) addWitness(target)
     }
 
-    fun decideFame() {
-        val sortedByRoundEventDatas = vertices.values.sortedBy { it.round }
+    fun decideFameBy(decider: HashgraphEventData) {
+        if (!decider.isWitness) {
+            logger.info("Decider: $decider is not a witness, skipping...")
+            return
+        }
 
-        x@ sortedByRoundEventDatas.forEach { x ->
-            x.famous = false
+        if (decider.round <= BigInteger.ONE) {
+            logger.info("Decider: $decider is a first event in history, skipping...")
+            return
+        }
 
-            y@ sortedByRoundEventDatas.forEach { y ->
-                if (x.isWitness && y.isWitness && y.round > x.round) {
-                    val diff = y.round - x.round
-                    val allWitnessesOfRoundThatYCanStronglySee = vertices.values
-                            .filter { it.round == y.round - BigInteger.ONE }
-                            .filter { it.isWitness }
-                            .filter { canStronglySee(y, it) }
-                    val majorityVote = allWitnessesOfRoundThatYCanStronglySee
-                            .map { it.vote }
-                            .count { it } >= allWitnessesOfRoundThatYCanStronglySee.size / 2
-                    val majorityVoteCount = allWitnessesOfRoundThatYCanStronglySee
-                            .map { it.vote }
-                            .count { it == majorityVote }
+        val unfamousWitnesses = mutableListOf<HashgraphEventData>()
 
-                    if (diff == BigInteger.ONE) {
-                        y.vote = canSee(y, x)
+        // from earliest round
+        var round = BigInteger.ONE
+        while (round < decider.round) {
+            unfamousWitnesses.addAll(getUnfamousWitnessesOf(round))
+            round += BigInteger.ONE
+        }
+
+        unfamousWitnesses.forEach { witness ->
+            val diff = decider.round - witness.round
+
+            if (diff == BigInteger.ONE) {
+                val vote = Vote(decider.event.hash(), canSee(decider, witness))
+                addVote(witness.event.hash(), vote)
+            } else {
+                if (decider.round.mod(coinRoundRate) == BigInteger.ZERO) { // coin round
+                    val vote = Vote(decider.event.hash(), decider.event.issuerId().testBit(1))
+                    addVote(witness.event.hash(), vote)
+                } else {
+                    val allVotes = getVotes(witness.event.hash())
+                    val majorityVote = allVotes.count { it.vote } >= getSupermajorityOf(allVotes)
+                    val majorityVotedCount = allVotes.count { it.vote == majorityVote }
+
+                    if (majorityVotedCount >= getSupermajorityOf(heads.keys)) {
+                        witness.famous = majorityVote
+
+                        val vote = Vote(decider.event.hash(), majorityVote)
+                        addVote(witness.event.hash(), vote)
                     } else {
-                        if (diff.mod(coinRoundRate) !== BigInteger.ZERO) {
-                            y.vote = majorityVote
-
-                            if (majorityVoteCount > allWitnessesOfRoundThatYCanStronglySee.size * 2 / 3) {
-                                x.famous = majorityVote
-                                return@y
-                            }
-                        } else {
-                            if (majorityVoteCount > allWitnessesOfRoundThatYCanStronglySee.size * 2 / 3)
-                                y.vote = majorityVote
-                            else
-                                y.vote = y.event.issuerId().testBit(1) // not middle bit of signature, but okay too; we can use secure random here
-                        }
+                        val vote = Vote(decider.event.hash(), majorityVote)
+                        addVote(witness.event.hash(), vote)
                     }
                 }
             }
         }
     }
 
-    fun findOrder() {
-        vertices.values.forEach {
-            val groupedByRound = vertices.values.associateBy { it.round }
-            groupedByRound.filter { /* THIS IS TOO HARD OMG THAT WHITEPAPER */ }
+    fun getVotes(of: ByteArray): MutableList<Vote> {
+        val bigIntHash = BigInteger(of)
+        return votes[bigIntHash] ?: mutableListOf()
+    }
+
+    // votes should be added from earliest round
+    fun addVote(to: ByteArray, vote: Vote) {
+        val bigIntHash = BigInteger(to)
+        if (votes[bigIntHash] == null)
+            votes[bigIntHash] = mutableListOf()
+
+        val previousVoteOfThisGuy = votes[bigIntHash]!!.find { it.from.contentEquals(vote.from) }
+        if (previousVoteOfThisGuy != null)
+            votes[bigIntHash]!!.remove(previousVoteOfThisGuy)
+
+        votes[bigIntHash]!!.add(vote)
+    }
+
+    // cache eventually
+    fun getUnfamousWitnessesOf(round: BigInteger): List<HashgraphEventData> {
+        return getWitnessesOf(round).filter { !it.famous }
+    }
+
+    // cache eventually
+    fun getFamousWitnessesOf(round: BigInteger): List<HashgraphEventData> {
+        return getWitnessesOf(round).filter { it.famous }
+    }
+
+    // cache eventually
+    fun getUnorderedEventsOfRound(round: BigInteger): List<HashgraphEventData> {
+        return vertices.values
+                .filter { it.round == round }
+                .filter { it.roundReceived != BigInteger.ZERO }
+    }
+
+    fun getUnorderedEventsEarlierThanRound(round: BigInteger): List<HashgraphEventData> {
+        return vertices.values
+                .filter { it.round < round }
+                .filter { it.roundReceived != BigInteger.ZERO }
+    }
+
+    fun findOrderOf(round: BigInteger) {
+        if (round <= BigInteger.ONE) return
+
+        val witnesses = getFamousWitnessesOf(round)
+
+        val events = getUnorderedEventsOfRound(round - BigInteger.ONE)
+        events.forEach { calcOrderOf(it, witnesses) }
+
+        val previousEvents = getUnorderedEventsEarlierThanRound(round - BigInteger.ONE)
+        previousEvents.forEach { calcOrderOf(it, witnesses) }
+    }
+
+    private fun calcOrderOf(event: HashgraphEventData, witnesses: List<HashgraphEventData>) {
+        val canAssignOrder = witnesses.map { canSee(it, event) }.all { can -> can }
+
+        if (canAssignOrder) {
+            event.roundReceived = witnesses[0].round
+            event.consensusTimestamp = witnesses.map { it.event.timestamp }.sorted()[witnesses.size / 2]
         }
     }
 }
 
 // 2n/3, n - number of participants
-fun <T> getSupermajorityOf(collection: Collection<T>): Int
-        = if (collection.size % 2 == 0 || collection.size == 1) collection.size * 2 / 3 + 1 else collection.size * 2 / 3
+fun <T> getSupermajorityOf(collection: Collection<T>): Int = if (collection.size % 2 == 0 || collection.size == 1) collection.size * 2 / 3 + 1 else collection.size * 2 / 3
