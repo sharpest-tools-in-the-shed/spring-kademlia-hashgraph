@@ -14,7 +14,7 @@ class HashgraphEventTest {
 
         val genesisEvent = HashgraphEvent(
                 10L,
-                issuer.public,
+                CryptoUtils.publicKeyToId(issuer.public),
                 randomBigInteger(),
                 null,
                 null
@@ -22,7 +22,7 @@ class HashgraphEventTest {
 
         val nonGenesisEvent = HashgraphEvent(
                 11L,
-                issuer.public,
+                CryptoUtils.publicKeyToId(issuer.public),
                 randomBigInteger(),
                 randomBigInteger(),
                 randomBigInteger()
@@ -56,7 +56,7 @@ class HashgraphEventTest {
         assert(firstGenesisId == secondGenesisId) { "Event hashing is inconsistent" }
         assert(firstGenesisId != nonGenesisId) { "Event hashing has collisions" }
 
-        assert(genesisEvent.signerPublicKey == issuer.public) { "Public keys are different" }
+        assert(CryptoUtils.idToPublicKey(genesisEvent.creatorId) == issuer.public) { "Public keys are different" }
     }
 
     @Test

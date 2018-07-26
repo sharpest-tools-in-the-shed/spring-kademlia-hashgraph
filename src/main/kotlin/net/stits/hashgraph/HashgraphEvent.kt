@@ -1,11 +1,11 @@
 package net.stits.hashgraph
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import net.stits.osen.SerializationUtils
 import net.stits.osen.loggerFor
 import net.stits.utils.CryptoUtils
 import java.math.BigInteger
 import java.security.KeyPair
-import java.security.PublicKey
 import java.util.*
 
 /**
@@ -66,7 +66,7 @@ class HashgraphEventBuilder {
 
         val event = HashgraphEvent(
                 timestamp,
-                keyPair.public,
+                CryptoUtils.publicKeyToId(keyPair.public),
                 signature,
                 selfParent,
                 otherParent
@@ -80,7 +80,7 @@ class HashgraphEventBuilder {
 
 data class HashgraphEvent(
         val timestamp: Long,
-        val signerPublicKey: PublicKey,
+        val creatorId: CreatorId,
         val signature: Signature,
 
         val selfParentId: EventId?,
@@ -99,12 +99,13 @@ data class HashgraphEvent(
         )
         val hash = CryptoUtils.hash(*fieldsToTakeIntoAccount)
 
-        val signatureCheckPassed = CryptoUtils.verify(signature.toByteArray(), *fieldsToTakeIntoAccount, hash) { signerPublicKey }
+        val signatureCheckPassed = CryptoUtils.verify(signature.toByteArray(), *fieldsToTakeIntoAccount, hash) { CryptoUtils.idToPublicKey(creatorId) }
 
         if (!signatureCheckPassed) logger.warning("Signatures don't match. Signature check fail.")
         return signatureCheckPassed
     }
 
+    @JsonIgnore
     fun isGenesis(): Boolean {
         return this.selfParentId == null || this.otherParentId == null
     }
@@ -114,13 +115,9 @@ data class HashgraphEvent(
                 selfParentId?.toByteArray(),
                 otherParentId?.toByteArray(),
                 signature.toByteArray(),
-                signerPublicKey.encoded
+                creatorId.toByteArray()
         )
 
         return BigInteger(CryptoUtils.hash(*fieldsToTakeIntoAccount))
-    }
-
-    fun creatorId(): BigInteger {
-        return CryptoUtils.publicKeyToId(signerPublicKey)
     }
 }

@@ -8,7 +8,6 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
 import java.math.BigInteger
 import java.security.KeyPair
-import javax.annotation.PostConstruct
 
 
 @Service
@@ -16,14 +15,8 @@ class IdentityService {
     @Autowired
     lateinit var p2p: P2P
 
-    private var host: String = "localhost"
-    private lateinit var keyPair: KeyPair
-
-    @PostConstruct
-    fun init() {
-        // TODO: get public keys from other place
-        keyPair = CryptoUtils.generateECDSAKeyPair()
-    }
+    private val host: String = "localhost"
+    private val keyPair: KeyPair = CryptoUtils.generateECDSAKeyPair()
 
     fun getHost(): String {
         return host

@@ -23,6 +23,16 @@ data class Ports(val web: Int, val p2p: Int) {
     }
 }
 
+fun createNodes(count: Int, baseWebPort: Int = 8080, baseP2PPort: Int = 1337): Pair<Ports, List<Ports>> {
+    val pivotPorts = Ports(baseWebPort, baseP2PPort)
+    val nodesPorts = arrayListOf<Ports>()
+    for (i in 1..count) {
+        nodesPorts.add(Ports(baseWebPort + i, baseP2PPort + i))
+    }
+
+    return Pair(pivotPorts, nodesPorts)
+}
+
 @RunWith(SpringJUnit4ClassRunner::class)
 class KademliaE2ETest {
     val restTemplateBuilder = RestTemplateBuilder()
@@ -160,16 +170,6 @@ class KademliaE2ETest {
         pivotClient.storeString(value)
 
         assertThrows { pivotClient.storeString(value) }
-    }
-
-    private fun createNodes(count: Int, baseWebPort: Int = 8080, baseP2PPort: Int = 1337): Pair<Ports, List<Ports>> {
-        val pivotPorts = Ports(baseWebPort, baseP2PPort)
-        val nodesPorts = arrayListOf<Ports>()
-        for (i in 1..count) {
-            nodesPorts.add(Ports(baseWebPort + i, baseP2PPort + i))
-        }
-
-        return Pair(pivotPorts, nodesPorts)
     }
 }
 

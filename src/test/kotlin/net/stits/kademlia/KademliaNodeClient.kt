@@ -37,6 +37,9 @@ class KademliaNodeClient(private val restTemplate: TestRestTemplate, private val
     fun ping(id: String) = doGet("http://$baseUrl/ping/$id")
     fun bootstrap(host: String, port: Int) = doPost("http://$baseUrl/bootstrap", hashMapOf("host" to host, "port" to port))
 
+    fun startSyncing() = doPost("http://$baseUrl/sync/start")
+
+    // TODO: move to utils
     private fun createHeaders(): HttpHeaders {
         val headers = HttpHeaders()
         headers.accept = listOf(MediaType.APPLICATION_JSON)
@@ -51,7 +54,7 @@ class KademliaNodeClient(private val restTemplate: TestRestTemplate, private val
         return response.body
     }
 
-    private fun doPost(url: String, params: Map<String, Any>): String? {
+    private fun doPost(url: String, params: Map<String, Any>? = null): String? {
         val requestJson = mapper.writeValueAsString(params)
         val entity = HttpEntity(requestJson, createHeaders())
 

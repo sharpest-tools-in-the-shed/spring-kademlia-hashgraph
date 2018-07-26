@@ -1,12 +1,10 @@
 package net.stits.hashgraph
 
-import net.stits.kademlia.e2e.assertNotThrows
-import net.stits.kademlia.e2e.assertThrows
 import net.stits.utils.CryptoUtils
+import net.stits.utils.contentEquals
+import net.stits.utils.equalsIgnoreSize
 import org.junit.Test
 import java.security.KeyPair
-import java.util.*
-
 
 class HashgraphTest {
     val PARTICIPANT_COUNT = 10
@@ -32,36 +30,36 @@ class HashgraphTest {
         val genesisEvent01 = builder.buildGenesis(issuer0)
         val genesisEvent02 = builder.buildGenesis(issuer0)
 
-        assertNotThrows { hg.validateEvent(genesisEvent01) }
+        assert(hg.isValid(genesisEvent01))
         hg.addEvent(genesisEvent01, Round.ONE)
-        assertThrows { hg.validateEvent(genesisEvent02) }
-        assertThrows { hg.validateEvent(genesisEvent01) }
+        assert(!hg.isValid(genesisEvent02))
+        assert(!hg.isValid(genesisEvent01))
 
         val issuer1 = participants[1]
         val genesisEvent11 = builder.buildGenesis(issuer1)
 
-        assertNotThrows { hg.validateEvent(genesisEvent11) }
+        assert(hg.isValid(genesisEvent11))
         hg.addEvent(genesisEvent11, Round.ONE)
-        assertThrows { hg.validateEvent(genesisEvent01) }
-        assertThrows { hg.validateEvent(genesisEvent02) }
+        assert(!hg.isValid(genesisEvent01))
+        assert(!hg.isValid(genesisEvent02))
 
         val nonGenesisEvent01 = builder.withSelfParent(genesisEvent01).withOtherParent(genesisEvent11).build(issuer0)
 
-        assertNotThrows { hg.validateEvent(nonGenesisEvent01) }
+        assert(hg.isValid(nonGenesisEvent01))
         hg.addEvent(nonGenesisEvent01, Round.ONE)
-        assertThrows { hg.validateEvent(genesisEvent01) }
-        assertThrows { hg.validateEvent(genesisEvent02) }
-        assertThrows { hg.validateEvent(nonGenesisEvent01) }
+        assert(!hg.isValid(genesisEvent01))
+        assert(!hg.isValid(genesisEvent02))
+        assert(!hg.isValid(nonGenesisEvent01))
 
         val nonGenesisEvent11 = builder.withSelfParent(genesisEvent11).withOtherParent(nonGenesisEvent01).build(issuer1)
 
-        assertNotThrows { hg.validateEvent(nonGenesisEvent11) }
+        assert(hg.isValid(nonGenesisEvent11))
         hg.addEvent(nonGenesisEvent11, Round.ONE)
-        assertThrows { hg.validateEvent(genesisEvent01) }
-        assertThrows { hg.validateEvent(genesisEvent02) }
-        assertThrows { hg.validateEvent(genesisEvent11) }
-        assertThrows { hg.validateEvent(nonGenesisEvent01) }
-        assertThrows { hg.validateEvent(nonGenesisEvent11) }
+        assert(!hg.isValid(genesisEvent01))
+        assert(!hg.isValid(genesisEvent02))
+        assert(!hg.isValid(genesisEvent11))
+        assert(!hg.isValid(nonGenesisEvent01))
+        assert(!hg.isValid(nonGenesisEvent11))
     }
 
     fun `unable to add forks`() {
@@ -76,18 +74,18 @@ class HashgraphTest {
         val nonGenesisEvent20 = builder.withSelfParent(genesisEvent2).withOtherParent(genesisEvent3).build(issuer2)
         val nonGenesisEvent21 = builder.withSelfParent(genesisEvent2).withOtherParent(genesisEvent3).build(issuer2)
 
-        assertNotThrows { hg.validateEvent(genesisEvent2) }
+        assert(hg.isValid(genesisEvent2))
         hg.addEvent(genesisEvent2, Round.ONE)
-        assertNotThrows { hg.validateEvent(genesisEvent3) }
+        assert(hg.isValid(genesisEvent3))
         hg.addEvent(genesisEvent3, Round.ONE)
 
-        assertNotThrows { hg.validateEvent(nonGenesisEvent20) }
-        assertNotThrows { hg.validateEvent(nonGenesisEvent21) }
+        assert(hg.isValid(nonGenesisEvent20))
+        assert(hg.isValid(nonGenesisEvent21))
         hg.addEvent(nonGenesisEvent20, Round.ONE)
-        assertThrows { hg.validateEvent(nonGenesisEvent21) }
+        assert(!hg.isValid(nonGenesisEvent21))
 
         val nonGenesisEvent22 = builder.withSelfParent(nonGenesisEvent20).withOtherParent(genesisEvent3).build(issuer2)
-        assertNotThrows { hg.validateEvent(nonGenesisEvent22) }
+        assert(hg.isValid(nonGenesisEvent22))
     }
 
     fun `events without parents are stored`() {
@@ -108,15 +106,15 @@ class HashgraphTest {
         val eventWithoutSelfParentOtherParentPresent = builder.withSelfParent(EventId.ONE).withOtherParent(genesisEvent5).build(issuer4)
         val eventWithoutOtherParentSelfParentPresent = builder.withSelfParent(genesisEvent4).withOtherParent(EventId.TEN).build(issuer4)
 
-        assert(hg.eventsWithoutParents.isEmpty()) { "Somehow there are already events without parents" }
+        assert(hg.getEventsWithoutParents().isEmpty()) { "Somehow there are already events without parents" }
 
-        assertThrows { hg.validateEvent(eventWithoutBothParents) }
-        assertThrows { hg.validateEvent(eventWithoutOtherParentSelfParentNull) }
-        assertThrows { hg.validateEvent(eventWithoutOtherParentSelfParentPresent) }
-        assertThrows { hg.validateEvent(eventWithoutSelfParentOtherParentNull) }
-        assertThrows { hg.validateEvent(eventWithoutSelfParentOtherParentPresent) }
+        assert(!hg.isValid(eventWithoutBothParents))
+        assert(!hg.isValid(eventWithoutOtherParentSelfParentNull))
+        assert(!hg.isValid(eventWithoutOtherParentSelfParentPresent))
+        assert(!hg.isValid(eventWithoutSelfParentOtherParentNull))
+        assert(!hg.isValid(eventWithoutSelfParentOtherParentPresent))
 
-        assert(hg.eventsWithoutParents.size == 3) { "There should be only 3 appropriate events" }
+        assert(hg.getEventsWithoutParents().size == 3) { "There should be only 3 appropriate events" }
     }
 
     fun `getAncestors and getSelfAncestors work properly`() {
@@ -336,7 +334,7 @@ class HashgraphTest {
         ) { "Unfamous witnesses are incorrect" }
 
         assert(
-                hg.orderedEvents.contentEquals(
+                hg.getConsensusEvents().contentEquals(
                         listOf(A1, B1, C1, D1, A2, D2, C11, A21, B11, B12, A11, D11, D12, D13).map { it.id() }
                 )
         ) { "Incorrect ordered events" }
@@ -402,16 +400,10 @@ class HashgraphTest {
         val hg2 = Hashgraph()
 
         events1.forEach { hg1.processEvent(it) }
-        events2.forEach {
-            try {
-                hg2.processEvent(it)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        events2.forEach { hg2.processEvent(it) }
 
-        assert(hg1.orderedEvents == hg2.orderedEvents) { "Immunity to different order of adding events doesnt' work" }
-        assert(hg2.eventsWithoutParents.isEmpty()) { "eventsWithoutParents do not clean itself" }
+        assert(hg1.getConsensusEvents() == hg2.getConsensusEvents()) { "Immunity to different order of adding events doesnt' work" }
+        assert(hg2.getEventsWithoutParents().isEmpty()) { "eventsWithoutParents do not clean itself" }
     }
 
     @Test
@@ -474,15 +466,9 @@ class HashgraphTest {
         val hg2 = Hashgraph()
 
         events1.forEach { hg1.processEvent(it) }
-        events2.forEach {
-            try {
-                hg2.processEvent(it)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        events2.forEach { hg2.processEvent(it) }
 
-        assert(hg2.orderedEvents.equalsIgnoreSize(hg1.orderedEvents)) { "Hashgraphs are inconsistent" }
+        assert(hg2.getConsensusEvents().equalsIgnoreSize(hg1.getConsensusEvents())) { "Hashgraphs are inconsistent" }
     }
 }
 
@@ -495,18 +481,4 @@ private fun createParticipants(count: Int): List<KeyPair> {
     for (i in 1..count) result.add(CryptoUtils.generateECDSAKeyPair())
 
     return result
-}
-
-fun <E> List<E>.randomOrNull(): E? = if (isNotEmpty()) get(Random().nextInt(size)) else null
-fun choice(): Boolean = Random().nextBoolean()
-
-/**
- * Bad functions. They doesn't report when types of lists are incompatible
- */
-fun <T> Collection<T>.contentEquals(other: @UnsafeVariance Collection<T>): Boolean = this.size == other.size && this.containsAll(other)
-fun <T> Collection<T>.equalsIgnoreSize(other: @UnsafeVariance Collection<T>): Boolean {
-    return if (this.size <= other.size) {
-        this.mapIndexed { index, it -> other.elementAt(index) == it }.all { it }
-    } else
-        other.mapIndexed { index, it -> this.elementAt(index) == it }.all { it }
 }

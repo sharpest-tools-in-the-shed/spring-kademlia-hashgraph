@@ -1,0 +1,110 @@
+package net.stits.hashgraph.services
+
+import net.stits.hashgraph.*
+import net.stits.kademlia.services.DiscoveryService
+import net.stits.osen.Message
+import net.stits.osen.P2P
+import net.stits.utils.randomOrNull
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.stereotype.Service
+
+
+data class EventInfo(
+        val id: EventId,
+        val selfParent: EventId?,
+        val otherParent: EventId?,
+        val consensusReached: Boolean
+) {
+    constructor(event: HashgraphEvent, consensusReached: Boolean) : this(event.id(), event.selfParentId, event.otherParentId, consensusReached)
+}
+
+@Service
+class ConsensusService {
+    val hg = Hashgraph()
+
+    fun addEvent(event: HashgraphEvent) {
+        hg.processEvent(event)
+    }
+
+    fun addEvents(vararg events: HashgraphEvent) {
+        events.forEach { hg.processEvent(it) }
+    }
+
+    fun addEvents(events: Collection<HashgraphEvent>) {
+        events.forEach { hg.processEvent(it) }
+    }
+
+    data class OrderedLastEvent(val eventId: EventId, val round: Round, val index: Int)
+
+    fun getLastEventBy(id: CreatorId) = hg.lastEventByParticipants[id]
+    fun getLastEvents() = hg.lastEventByParticipants
+    fun getLastEventsSortedByAddingOrder(): List<Pair<CreatorId, EventId>> = hg.lastEventByParticipantsOrdered.reversed()
+
+    fun getEvents(): List<HashgraphEvent> {
+        return hg.lastEventByParticipantsOrdered.map { hg.events[it.second]!! }
+    }
+
+    fun getEvents(from: EventId): List<HashgraphEvent> {
+        val events = getEvents()
+
+        val fromEvent = events.find { it.id() == from } ?: return emptyList()
+        val fromIndex = events.indexOf(fromEvent)
+
+        return events.filterIndexed { index, _ -> index > fromIndex }
+    }
+
+    fun getEventsInfo(): List<EventInfo> {
+        val allEvents = hg.getEvents()
+        val orderedEvents = hg.getOrderedEvents()
+        val unorderedEvents = allEvents.minus(orderedEvents)
+
+        val result = mutableListOf<EventInfo>()
+        orderedEvents.forEach { result.add(EventInfo(it, true)) }
+        unorderedEvents.forEach { result.add(EventInfo(it, false)) }
+
+        return result
+    }
+
+    fun getEventsInfo(from: EventId): List<EventInfo> {
+        val events = getEventsInfo()
+
+        val fromEvent = events.find { it.id == from } ?: return emptyList()
+        val fromIndex = events.indexOf(fromEvent)
+
+        return events.filterIndexed { index, _ -> index > fromIndex }
+    }
+
+    // TODO: to networking service all this mess
+    private val lastEventSentToPeer = hashMapOf<CreatorId, EventId>()
+
+    @Autowired
+    lateinit var discoveryService: DiscoveryService
+
+    @Autowired
+    lateinit var p2p: P2P
+
+    fun startSyncing() {
+        val peer = discoveryService.toList().randomOrNull()
+
+        if (peer != null) {
+            val lastEvent = lastEventSentToPeer[peer.getId()]
+
+            val events = if (lastEvent == null) getEvents() else getEvents(lastEvent)
+
+            println("New events: $events")
+
+            if (events.isNotEmpty()) {
+                p2p.sendTo(peer.getAddress()) {
+                    val payload = HashgraphSyncMessage(events, discoveryService.identityService.getId())
+                    Message(TOPIC_HASHGRAPH, HashgraphMessageTypes.SYNC, payload)
+                }
+
+                lastEventSentToPeer[peer.getId()] = events.last().id()
+
+                println("Sent events $events to $peer")
+            }
+        }
+    }
+
+    fun syncToSomeone() = startSyncing()
+}

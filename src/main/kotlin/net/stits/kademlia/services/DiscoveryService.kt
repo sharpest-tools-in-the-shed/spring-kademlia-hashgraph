@@ -8,6 +8,7 @@ import net.stits.kademlia.node.KHeap
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
 import java.math.BigInteger
+import javax.annotation.PostConstruct
 
 
 @Service
@@ -15,28 +16,23 @@ class DiscoveryService {
     @Autowired
     lateinit var identityService: IdentityService
 
-    var addressBook: KAddressBook? = null
+    lateinit var addressBook: KAddressBook
 
-    private fun initAddressBook() {
+    @PostConstruct
+    fun init() {
         addressBook = KHeap(identityService.getKAddress(), K_PARAMETER, ID_SPACE_SIZE)
     }
 
     fun addNode(address: KAddress): Boolean {
-        if (addressBook == null) initAddressBook()
-
-        return addressBook!!.addNode(address)
+        return addressBook.addNode(address)
     }
 
     fun addNodes(addresses: List<KAddress>) {
-        if (addressBook == null) initAddressBook()
-
-        return addressBook!!.addNodes(addresses)
+        return addressBook.addNodes(addresses)
     }
 
     fun toList(): List<KAddress> {
-        if (addressBook == null) initAddressBook()
-
-        return addressBook!!.getFlat()
+        return addressBook.getFlat()
     }
 
     fun addNewNodes(nodes: List<KAddress>): List<KAddress> {
@@ -46,38 +42,26 @@ class DiscoveryService {
     }
 
     fun removeNode(address: KAddress): Boolean {
-        if (addressBook == null) initAddressBook()
-
-        return addressBook!!.removeNode(address)
+        return addressBook.removeNode(address)
     }
 
     fun getClosest(id: BigInteger): KAddress? {
-        if (addressBook == null) initAddressBook()
-
-        return addressBook!!.getClosestTo(id).firstOrNull()
+        return addressBook.getClosestTo(id).firstOrNull()
     }
 
     fun getClosestKBucket(id: BigInteger): List<KAddress> {
-        if (addressBook == null) initAddressBook()
-
-        return addressBook!!.getClosestTo(id)
+        return addressBook.getClosestTo(id)
     }
 
     fun containsId(id: BigInteger): Boolean {
-        if (addressBook == null) initAddressBook()
-
-        return addressBook!!.containsNode(id)
+        return addressBook.containsNode(id)
     }
 
     fun containsAll(nodes: List<KAddress>): Boolean {
-        if (addressBook == null) initAddressBook()
-
-        return addressBook!!.getFlat().containsAll(nodes)
+        return addressBook.getFlat().containsAll(nodes)
     }
 
     fun getNodeById(id: BigInteger): KAddress? {
-        if (addressBook == null) initAddressBook()
-
-        return addressBook!!.getNodeById(id)
+        return addressBook.getNodeById(id)
     }
 }
