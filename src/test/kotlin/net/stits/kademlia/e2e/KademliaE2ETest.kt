@@ -176,11 +176,25 @@ class KademliaE2ETest {
 fun assertThrows(codeBlock: () -> Unit) {
     var thrown = false
 
-    return try {
+    try {
         codeBlock()
     } catch (e: Exception) {
+        e.printStackTrace()
         thrown = true
     } finally {
-        if (!thrown) throw AssertionError("Code block should throw an error")
+        assert(thrown) { "Code block should throw an error" }
+    }
+}
+
+fun assertNotThrows(codeBlock: () -> Unit) {
+    var thrown = false
+
+    try {
+        codeBlock()
+    } catch (e: Exception) {
+        e.printStackTrace()
+        thrown = true
+    } finally {
+        assert(!thrown) { "Code block shouldn't throw an error" }
     }
 }
