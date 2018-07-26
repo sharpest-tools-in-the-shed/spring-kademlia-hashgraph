@@ -9,6 +9,10 @@ import java.math.BigInteger
  * @param me {KAddress} - the hosts address
  * @param k {Int} - network k parameter (number of computers in network that unlikely to be offline at the same time) - usually 20
  * @param idSpaceSize {Int} - keysize in bits (or id size in bits) - using sha256 to generate keys means using idSpaceSize = 256
+ *
+ * Future improvements:
+ * todo 1. add clusters functionality (store, find, list)
+ * todo 2. remove dead nodes eventually
  */
 abstract class KAddressBook(val me: KAddress, protected val k: Int = 2, protected val idSpaceSize: Int = 256) {
     /**

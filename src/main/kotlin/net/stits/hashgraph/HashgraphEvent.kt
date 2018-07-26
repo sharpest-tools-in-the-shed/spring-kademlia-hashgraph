@@ -8,7 +8,11 @@ import java.security.KeyPair
 import java.security.PublicKey
 import java.util.*
 
-
+/**
+ * Future improvements:
+ * todo 1. add transactions
+ * todo 2. verify events somewhere (e.g. isValid hashgraph function)
+ */
 class HashgraphEventBuilder {
     private var selfParent: EventId? = null
     private var otherParent: EventId? = null

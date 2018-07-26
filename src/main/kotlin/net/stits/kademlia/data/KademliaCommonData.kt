@@ -41,8 +41,7 @@ data class KademliaAdditionalMetadata(val signature: ByteArray, val senderId: Bi
             val serializedMessage = SerializationUtils.anyToBytes(pack.message)
 
             val keyPair = provideKeyPair()
-            val hash = CryptoUtils.hash(serializedPort, serializedSession, serializedMessage)
-            val signature = CryptoUtils.sign(serializedPort, serializedSession, serializedMessage, hash) { keyPair.private }
+            val signature = CryptoUtils.sign(serializedPort, serializedSession, serializedMessage) { keyPair.private }
 
             return KademliaAdditionalMetadata(signature, CryptoUtils.publicKeyToId(keyPair.public))
         }
@@ -53,11 +52,15 @@ data class KademliaAdditionalMetadata(val signature: ByteArray, val senderId: Bi
 
             val additionalMetadata = SerializationUtils.bytesToAny<KademliaAdditionalMetadata>(serializedAdditionalMetadata!!)!!
 
+            val serializedPort = SerializationUtils.anyToBytes(pack.metadata.port)
+            val serializedSession = SerializationUtils.anyToBytes(pack.metadata.session)
+            val serializedMessage = SerializationUtils.anyToBytes(pack.message)
+
             val signatureCheckPassed = CryptoUtils.verify(
                     additionalMetadata.signature,
-                    SerializationUtils.anyToBytes(pack.metadata.port),
-                    SerializationUtils.anyToBytes(pack.metadata.session),
-                    SerializationUtils.anyToBytes(pack.message)
+                    serializedPort,
+                    serializedSession,
+                    serializedMessage
             ) { CryptoUtils.idToPublicKey(additionalMetadata.senderId) }
 
             if (!signatureCheckPassed) Package.logger.warning("Signatures don't match. Signature check fail.")

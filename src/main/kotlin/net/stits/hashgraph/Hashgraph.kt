@@ -7,7 +7,14 @@ typealias CreatorId = BigInteger
 typealias Round = BigInteger
 typealias Signature = BigInteger
 
-
+/**
+ * Future improvements:
+ * todo 0. let it be generator
+ * todo 1. remove old events starting from some round (e.g. currentRound - 10) = store only slice of hashgraph
+ * todo 2. allow new issuers to participate
+ * todo 3. allow first events without parents of issuers to participate
+ * todo 4. profile
+ */
 class Hashgraph : Iterable<HashgraphEvent> {
     internal val events = hashMapOf<Round, HashgraphEvent>()
     internal val orderedEvents = mutableListOf<EventId>()
