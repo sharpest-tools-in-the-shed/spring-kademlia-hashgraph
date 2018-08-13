@@ -66,8 +66,8 @@ class Hashgraph {
     fun getEventById(id: EventId): HashgraphEvent? = events[id]
     fun getRoundOfEvent(id: EventId) = eventsByRound.entries.find { it.value.contains(id) }?.key
     fun getEvents() = events.values.toMutableList()
-    internal fun getEvents(of: Round) = eventsByRound[of]?.map { events[it]!! } ?: emptyList()
-    internal fun getEvents(from: Round, to: Round) = eventsByRound
+    fun getEvents(of: Round) = eventsByRound[of]?.map { events[it]!! } ?: emptyList()
+    fun getEvents(from: Round, to: Round) = eventsByRound
             .filterKeys { it in (from..to) }.values
             .flatten()
             .map { events[it]!! }
@@ -88,10 +88,10 @@ class Hashgraph {
      * Main method that handles all the dirty job
      * It validates event, applies algorithm to hashgraph using this new event and adds it
      */
-    private fun process(event: HashgraphEvent): Boolean {
-        val eventId = event.id()
-
+    fun process(event: HashgraphEvent): Boolean {
         if (!isValid(event)) return false
+
+        val eventId = event.id()
 
         if (event.isGenesis()) {
             addEvent(event, Round.ONE)
@@ -124,9 +124,19 @@ class Hashgraph {
         return true
     }
 
+
+
     fun processEventsWithoutParents(): Boolean {
-        val success = eventsWithoutParents.map { process(it) }
-        success.forEachIndexed { index, b ->  if (b) eventsWithoutParents.removeAt(index) }
+        val eventsWithoutParentsToDelete = mutableListOf<HashgraphEvent>()
+
+        val success = eventsWithoutParents.map {
+            val success = process(it)
+            if (success) eventsWithoutParentsToDelete.add(it)
+
+            success
+        }
+
+        eventsWithoutParentsToDelete.forEach { eventsWithoutParents.remove(it) }
 
         return success.any { it }
     }
@@ -367,7 +377,7 @@ class Hashgraph {
     private fun forksNotPresent(event: HashgraphEvent) = lastEventByParticipants[event.creatorId] == event.selfParentId
 
     /**
-     * Checks if event has parents
+     * Checks if event's parents are already in hashgraph
      */
     private fun parentsPresent(event: HashgraphEvent): Boolean {
         return events.containsKey(event.selfParentId) && events.containsKey(event.otherParentId)

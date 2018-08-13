@@ -7,7 +7,8 @@ import net.stits.kademlia.data.KAddress
 import net.stits.kademlia.services.DiscoveryService
 import net.stits.kademlia.services.IdentityService
 import net.stits.osen.Address
-import net.stits.osen.On
+import net.stits.osen.OnRequest
+import net.stits.osen.OnResponse
 import net.stits.osen.P2PController
 import org.springframework.beans.factory.annotation.Autowired
 import java.math.BigInteger
@@ -46,11 +47,12 @@ class HashgraphControllerP2P {
         lastSyncedPeer = identityService.getKAddress()
     }
 
-    @On(HashgraphMessageTypes.SYNC)
-    fun handleSync(message: HashgraphSyncMessage, sender: Address) {
+    @OnRequest(HashgraphMessageTypes.SYNC)
+    fun handleSyncReq(message: HashgraphSyncMessage, sender: Address): Boolean {
         println("Got events ${message.events} from $sender")
 
-        if (message.events.isEmpty()) return
+        if (message.events.isEmpty()) return false
+
         consensusService.addEvents(message.events)
 
         val myId = identityService.getId()
@@ -76,5 +78,13 @@ class HashgraphControllerP2P {
 
             consensusService.syncWithPeer(nextPeer)
         }
+
+        return true
+    }
+
+    // TODO [osen]: make it possible to not implement OnResponse passing response directly
+    @OnResponse(HashgraphMessageTypes.SYNC)
+    fun handleSyncRes(response: Boolean, address: Address): Boolean {
+        return response
     }
 }

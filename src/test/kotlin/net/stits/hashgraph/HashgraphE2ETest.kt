@@ -69,14 +69,22 @@ class HashgraphE2ETest {
                         .all { resp -> resp == "Ok" }
         ) { "Unable to start syncing on all nodes" }
 
-        runBlocking {
+        val allHashgraphsAreConsistent = runBlocking {
             delay(10000)
 
             val eventsByClients = nodeClients
                     .map { it.getEvents() }
 
-            println(eventsByClients)
+            val consensusEventsByClients = eventsByClients
+                    .map { it.filter { it.consensusReached } }
+
+            val lesserConsensusEventCollection = consensusEventsByClients.minBy { it.size }!!
+
+            eventsByClients
+                    .all { it.subList(0, lesserConsensusEventCollection.lastIndex) == lesserConsensusEventCollection }
         }
+
+        assert(allHashgraphsAreConsistent) { "Hashgraphs are in inconsistent state" }
     }
 
     @After

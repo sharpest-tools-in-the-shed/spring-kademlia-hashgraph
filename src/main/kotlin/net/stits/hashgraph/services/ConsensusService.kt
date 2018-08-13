@@ -1,5 +1,6 @@
 package net.stits.hashgraph.services
 
+import kotlinx.coroutines.experimental.runBlocking
 import net.stits.hashgraph.*
 import net.stits.kademlia.data.KAddress
 import net.stits.kademlia.services.DiscoveryService
@@ -96,14 +97,19 @@ class ConsensusService {
         println("New events: $events")
 
         if (events.isNotEmpty()) {
-            p2p.sendTo(peer.getAddress()) {
-                val payload = HashgraphSyncMessage(events, identityService.getId())
-                Message(TOPIC_HASHGRAPH, HashgraphMessageTypes.SYNC, payload)
-            }
+            while (sendEvents(peer, events) == null)
+                println("Trying to send events $events to $peer")
 
             lastEventSentToPeer[peer.getId()] = events.last().id()
 
             println("Sent events $events to $peer")
+        }
+    }
+
+    fun sendEvents(peer: KAddress, events: List<HashgraphEvent>) = runBlocking {
+        p2p.requestFrom<Boolean>(peer.getAddress()) {
+            val payload = HashgraphSyncMessage(events, identityService.getId())
+            Message(TOPIC_HASHGRAPH, HashgraphMessageTypes.SYNC, payload)
         }
     }
 
