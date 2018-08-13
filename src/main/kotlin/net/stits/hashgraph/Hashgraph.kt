@@ -59,11 +59,13 @@ class Hashgraph {
      */
     private val elections = hashMapOf<EventId, MutableList<CreatorId>>()
 
+    fun getEventsInAddOrder() = eventsInAddOrder
+    fun getLastEventsByParticipants() = lastEventByParticipants
     fun getEventsWithoutParents() = eventsWithoutParents
     fun getConsensusEvents() = consensusEvents
     fun getEventById(id: EventId): HashgraphEvent? = events[id]
     fun getRoundOfEvent(id: EventId) = eventsByRound.entries.find { it.value.contains(id) }?.key
-    fun getEvents() = events.values
+    fun getEvents() = events.values.toMutableList()
     internal fun getEvents(of: Round) = eventsByRound[of]?.map { events[it]!! } ?: emptyList()
     internal fun getEvents(from: Round, to: Round) = eventsByRound
             .filterKeys { it in (from..to) }.values
@@ -74,23 +76,28 @@ class Hashgraph {
         val logger = loggerFor<Hashgraph>()
     }
 
+    fun processEvent(event: HashgraphEvent) {
+        val success = process(event)
+
+        if (success) {
+            while (processEventsWithoutParents()) {}
+        }
+    }
+
     /**
      * Main method that handles all the dirty job
      * It validates event, applies algorithm to hashgraph using this new event and adds it
      */
-    fun processEvent(event: HashgraphEvent) {
+    private fun process(event: HashgraphEvent): Boolean {
         val eventId = event.id()
 
-        if (!isValid(event)) return
-
-        eventsWithoutParents.remove(event)
+        if (!isValid(event)) return false
 
         if (event.isGenesis()) {
             addEvent(event, Round.ONE)
             addWitness(eventId, Round.ONE)
 
-            eventsWithoutParents.forEach { processEvent(it) }
-            return
+            return true
         }
 
         val (round, isWitness) = calculateRoundAndDecideWitness(event)
@@ -99,9 +106,8 @@ class Hashgraph {
 
         if (!isWitness) {
             addEvent(event, round)
-            eventsWithoutParents.forEach { processEvent(it) }
 
-            return
+            return true
         }
 
         vote(event, round)
@@ -110,15 +116,19 @@ class Hashgraph {
         addEvent(event, round)
         addWitness(event, round)
 
-        if (newFamousWitnesses.isEmpty()) {
-            eventsWithoutParents.forEach { processEvent(it) }
-            return
-        }
+        if (newFamousWitnesses.isEmpty()) return true
 
         val newOrderedEvents = applyOrder(newFamousWitnesses)
         consensusEvents.addAll(newOrderedEvents)
 
-        eventsWithoutParents.forEach { processEvent(it) }
+        return true
+    }
+
+    fun processEventsWithoutParents(): Boolean {
+        val success = eventsWithoutParents.map { process(it) }
+        success.forEachIndexed { index, b ->  if (b) eventsWithoutParents.removeAt(index) }
+
+        return success.any { it }
     }
 
     /**
@@ -278,11 +288,11 @@ class Hashgraph {
                         return@forEach
                     }
 
-                    if (descendants.map { events[it]!! }
-                                    .any {
-                                        it.creatorId == event.creatorId
-                                    }
-                    ) return@forEach
+                    val sameCreator = descendants
+                            .map { events[it]!! }
+                            .any { it.creatorId == event.creatorId }
+
+                    if (sameCreator) return@forEach
 
                     firstEventsWhichKnowAboutEvent[ancestor.id()]!!.add(eventId)
                 }

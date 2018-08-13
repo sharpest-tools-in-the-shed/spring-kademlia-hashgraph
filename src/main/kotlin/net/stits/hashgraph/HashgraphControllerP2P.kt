@@ -3,6 +3,8 @@ package net.stits.hashgraph
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.runBlocking
 import net.stits.hashgraph.services.ConsensusService
+import net.stits.kademlia.data.KAddress
+import net.stits.kademlia.services.DiscoveryService
 import net.stits.kademlia.services.IdentityService
 import net.stits.osen.Address
 import net.stits.osen.On
@@ -23,11 +25,16 @@ typealias State = BigInteger
 
 @P2PController(TOPIC_HASHGRAPH)
 class HashgraphControllerP2P {
+    private lateinit var lastSyncedPeer: KAddress
+
     @Autowired
     lateinit var consensusService: ConsensusService
 
     @Autowired
     lateinit var identityService: IdentityService
+
+    @Autowired
+    lateinit var discoveryService: DiscoveryService
 
     private val eventBuilder = HashgraphEventBuilder()
 
@@ -35,6 +42,8 @@ class HashgraphControllerP2P {
     fun createGenesis() {
         val genesisEvent = eventBuilder.buildGenesis(identityService.getKeyPair())
         consensusService.addEvent(genesisEvent)
+
+        lastSyncedPeer = identityService.getKAddress()
     }
 
     @On(HashgraphMessageTypes.SYNC)
@@ -53,7 +62,19 @@ class HashgraphControllerP2P {
 
         runBlocking {
             delay(100)
-            consensusService.syncToSomeone()
+
+            val peers = discoveryService.toList().sortedBy { it.getId() }
+            val lastPeerIndex = peers.indexOf(lastSyncedPeer)
+
+            val nextPeerIndex = when (lastPeerIndex) {
+                -1 -> 0
+                peers.lastIndex -> 0
+                else -> lastPeerIndex + 1
+            }
+            val nextPeer = peers[nextPeerIndex]
+            lastSyncedPeer = nextPeer
+
+            consensusService.syncWithPeer(nextPeer)
         }
     }
 }

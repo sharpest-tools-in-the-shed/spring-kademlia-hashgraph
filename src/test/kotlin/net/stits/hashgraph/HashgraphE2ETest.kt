@@ -1,5 +1,7 @@
 package net.stits.hashgraph
 
+import kotlinx.coroutines.experimental.delay
+import kotlinx.coroutines.experimental.runBlocking
 import net.stits.Application
 import net.stits.kademlia.KademliaNodeClient
 import net.stits.kademlia.e2e.Ports
@@ -23,7 +25,7 @@ class HashgraphE2ETest {
     lateinit var nodesPorts: List<Ports>
     val host = "localhost"
 
-    val nodesCount = 10 // change this to change number of nodes
+    val nodesCount = 4 // change this to change number of nodes
 
     lateinit var pivotClient: KademliaNodeClient
     lateinit var nodeClients: List<KademliaNodeClient>
@@ -67,7 +69,13 @@ class HashgraphE2ETest {
                         .all { resp -> resp == "Ok" }
         ) { "Unable to start syncing on all nodes" }
 
-        while (true) {
+        runBlocking {
+            delay(10000)
+
+            val eventsByClients = nodeClients
+                    .map { it.getEvents() }
+
+            println(eventsByClients)
         }
     }
 

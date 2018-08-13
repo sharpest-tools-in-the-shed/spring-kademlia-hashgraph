@@ -403,7 +403,7 @@ class HashgraphTest {
         events2.forEach { hg2.processEvent(it) }
 
         assert(hg1.getConsensusEvents() == hg2.getConsensusEvents()) { "Immunity to different order of adding events doesnt' work" }
-        assert(hg2.getEventsWithoutParents().isEmpty()) { "eventsWithoutParents do not clean itself" }
+        assert(hg2.getEventsWithoutParents().isEmpty()) { "eventsWithoutParents did not clean itself" }
     }
 
     @Test

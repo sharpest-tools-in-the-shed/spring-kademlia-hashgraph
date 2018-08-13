@@ -3,6 +3,7 @@ package net.stits.kademlia
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
+import net.stits.hashgraph.services.EventInfo
 import net.stits.kademlia.data.KAddress
 import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.http.HttpEntity
@@ -38,6 +39,12 @@ class KademliaNodeClient(private val restTemplate: TestRestTemplate, private val
     fun bootstrap(host: String, port: Int) = doPost("http://$baseUrl/bootstrap", hashMapOf("host" to host, "port" to port))
 
     fun startSyncing() = doPost("http://$baseUrl/sync/start")
+
+    fun getEvents(): List<EventInfo> {
+        val response = doGet("http://$baseUrl/events")!!
+
+        return mapper.readValue(response)
+    }
 
     // TODO: move to utils
     private fun createHeaders(): HttpHeaders {

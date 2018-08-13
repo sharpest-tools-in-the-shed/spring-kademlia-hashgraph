@@ -1,7 +1,9 @@
 package net.stits.hashgraph.services
 
 import net.stits.hashgraph.*
+import net.stits.kademlia.data.KAddress
 import net.stits.kademlia.services.DiscoveryService
+import net.stits.kademlia.services.IdentityService
 import net.stits.osen.Message
 import net.stits.osen.P2P
 import net.stits.utils.randomOrNull
@@ -36,12 +38,12 @@ class ConsensusService {
 
     data class OrderedLastEvent(val eventId: EventId, val round: Round, val index: Int)
 
-    fun getLastEventBy(id: CreatorId) = hg.lastEventByParticipants[id]
-    fun getLastEvents() = hg.lastEventByParticipants
-    fun getLastEventsSortedByAddingOrder(): List<Pair<CreatorId, EventId>> = hg.lastEventByParticipantsOrdered.reversed()
+    fun getLastEventBy(id: CreatorId) = hg.getLastEventsByParticipants()[id]
+    fun getLastEvents() = hg.getLastEventsByParticipants()
+    fun getLastEventsSortedByAddingOrder(): List<EventId> = hg.getEventsInAddOrder().reversed()
 
     fun getEvents(): List<HashgraphEvent> {
-        return hg.lastEventByParticipantsOrdered.map { hg.events[it.second]!! }
+        return hg.getEventsInAddOrder().map { hg.getEventById(it)!! }
     }
 
     fun getEvents(from: EventId): List<HashgraphEvent> {
@@ -55,11 +57,11 @@ class ConsensusService {
 
     fun getEventsInfo(): List<EventInfo> {
         val allEvents = hg.getEvents()
-        val orderedEvents = hg.getOrderedEvents()
-        val unorderedEvents = allEvents.minus(orderedEvents)
+        val consensusEvents = hg.getConsensusEvents().map { hg.getEventById(it)!! }
+        val unorderedEvents = allEvents.minus(consensusEvents)
 
         val result = mutableListOf<EventInfo>()
-        orderedEvents.forEach { result.add(EventInfo(it, true)) }
+        consensusEvents.forEach { result.add(EventInfo(it, true)) }
         unorderedEvents.forEach { result.add(EventInfo(it, false)) }
 
         return result
@@ -78,33 +80,40 @@ class ConsensusService {
     private val lastEventSentToPeer = hashMapOf<CreatorId, EventId>()
 
     @Autowired
+    lateinit var p2p: P2P
+
+    @Autowired
     lateinit var discoveryService: DiscoveryService
 
     @Autowired
-    lateinit var p2p: P2P
+    lateinit var identityService: IdentityService
 
-    fun startSyncing() {
-        val peer = discoveryService.toList().randomOrNull()
+    fun syncWithPeer(peer: KAddress) {
+        val lastEvent = lastEventSentToPeer[peer.getId()]
 
-        if (peer != null) {
-            val lastEvent = lastEventSentToPeer[peer.getId()]
+        val events = if (lastEvent == null) getEvents() else getEvents(lastEvent)
 
-            val events = if (lastEvent == null) getEvents() else getEvents(lastEvent)
+        println("New events: $events")
 
-            println("New events: $events")
-
-            if (events.isNotEmpty()) {
-                p2p.sendTo(peer.getAddress()) {
-                    val payload = HashgraphSyncMessage(events, discoveryService.identityService.getId())
-                    Message(TOPIC_HASHGRAPH, HashgraphMessageTypes.SYNC, payload)
-                }
-
-                lastEventSentToPeer[peer.getId()] = events.last().id()
-
-                println("Sent events $events to $peer")
+        if (events.isNotEmpty()) {
+            p2p.sendTo(peer.getAddress()) {
+                val payload = HashgraphSyncMessage(events, identityService.getId())
+                Message(TOPIC_HASHGRAPH, HashgraphMessageTypes.SYNC, payload)
             }
+
+            lastEventSentToPeer[peer.getId()] = events.last().id()
+
+            println("Sent events $events to $peer")
         }
     }
 
-    fun syncToSomeone() = startSyncing()
+    fun syncWithRandom() {
+        val peer = discoveryService.toList().randomOrNull()
+
+        if (peer != null)
+            syncWithPeer(peer)
+
+    }
+
+    fun startSyncing() = syncWithRandom()
 }
