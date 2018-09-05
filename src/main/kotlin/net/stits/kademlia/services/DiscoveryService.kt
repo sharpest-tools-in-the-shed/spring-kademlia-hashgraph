@@ -32,7 +32,7 @@ class DiscoveryService {
     }
 
     fun toList(): List<KAddress> {
-        return addressBook.getFlat()
+        return addressBook.getFlat().filter { it.getId() != addressBook.me.getId() }
     }
 
     fun addNewNodes(nodes: List<KAddress>): List<KAddress> {

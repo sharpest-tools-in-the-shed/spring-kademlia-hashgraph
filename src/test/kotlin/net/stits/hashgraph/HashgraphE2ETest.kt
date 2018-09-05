@@ -58,31 +58,30 @@ class HashgraphE2ETest {
     @Test
     fun processTest() {
         assert(
-                nodeClients
-                        .map { it.bootstrap(host, pivotPorts.p2p) }
-                        .all { resp -> resp == "Ok" }
+            nodeClients
+                .map { it.bootstrap(host, pivotPorts.p2p) }
+                .all { resp -> resp == "Ok" }
         ) { "Unable to bootstrap all nodes" }
 
-        assert(
-                nodeClients
-                        .map { it.startSyncing() }
-                        .all { resp -> resp == "Ok" }
-        ) { "Unable to start syncing on all nodes" }
+        assert(pivotClient.getAddressBook().isNotEmpty()) { "Pivot has an empty address book" }
 
-        val allHashgraphsAreConsistent = runBlocking {
-            delay(10000)
+        val books = nodeClients.map { it.getAddressBook() }
+        assert(books.all { addressBook -> addressBook.isNotEmpty() }) { "Some of nodes has its address book empty" }
 
-            val eventsByClients = nodeClients
-                    .map { it.getEvents() }
+        pivotClient.startSyncing()
 
-            val consensusEventsByClients = eventsByClients
-                    .map { it.filter { it.consensusReached } }
+        runBlocking { delay(10000) }
 
-            val lesserConsensusEventCollection = consensusEventsByClients.minBy { it.size }!!
+        val eventsByClients = nodeClients
+            .map { it.getEvents() }
 
-            eventsByClients
-                    .all { it.subList(0, lesserConsensusEventCollection.lastIndex) == lesserConsensusEventCollection }
-        }
+        val consensusEventsByClients = eventsByClients
+            .map { events -> events.filter { it.consensusReached } }
+
+        val lesserConsensusEventCollection = consensusEventsByClients.minBy { it.size }!!
+
+        val allHashgraphsAreConsistent = consensusEventsByClients
+            .all { it.subList(0, lesserConsensusEventCollection.size) == lesserConsensusEventCollection }
 
         assert(allHashgraphsAreConsistent) { "Hashgraphs are in inconsistent state" }
     }

@@ -74,19 +74,20 @@ abstract class KAddressBook(val me: KAddress, protected val k: Int = 2, protecte
 }
 
 
-class KHeap(me: KAddress, k: Int = 2, idSpaceSize: Int = 256): KAddressBook(me, k, idSpaceSize) {
+class KHeap(me: KAddress, k: Int = 2, idSpaceSize: Int = 256) : KAddressBook(me, k, idSpaceSize) {
     private val heap = hashMapOf<BigInteger, KAddress>()
 
     override fun addNode(node: KAddress): Boolean {
-        return if (containsNode(node.getId())) false
-        else {
+        return if (containsNode(node.getId())) {
+            false
+        } else {
             heap[node.getId()] = node
             true
         }
     }
 
     override fun addNodes(nodes: List<KAddress>) {
-        heap.putAll(nodes.map { it.getId() to it }.toMap())
+        heap.putAll(nodes.associate { it.getId() to it })
     }
 
     override fun removeNode(node: KAddress): Boolean {
@@ -111,12 +112,12 @@ class KHeap(me: KAddress, k: Int = 2, idSpaceSize: Int = 256): KAddressBook(me, 
     }
 
     override fun getFlat(): List<KAddress> {
-        return heap.values.toList()
-                .filter { it.getId() != me.getId() } // removing myself from result
+        val flat = heap.values.toMutableList()
+        flat.add(me)
+        return flat
     }
 
     fun getFlatSortedByDistanceTo(id: BigInteger): List<KAddress> {
-        return getFlat()
-                .sortedBy { it.getId().xor(id) } // sorting by distance
+        return getFlat().sortedBy { it.getId().xor(id) } // sorting by distance
     }
 }

@@ -13,12 +13,17 @@ import org.springframework.stereotype.Service
 
 
 data class EventInfo(
-        val id: EventId,
-        val selfParent: EventId?,
-        val otherParent: EventId?,
-        val consensusReached: Boolean
+    val id: EventId,
+    val selfParent: EventId?,
+    val otherParent: EventId?,
+    val consensusReached: Boolean
 ) {
-    constructor(event: HashgraphEvent, consensusReached: Boolean) : this(event.id(), event.selfParentId, event.otherParentId, consensusReached)
+    constructor(event: HashgraphEvent, consensusReached: Boolean) : this(
+        event.id(),
+        event.selfParentId,
+        event.otherParentId,
+        consensusReached
+    )
 }
 
 @Service
@@ -53,7 +58,7 @@ class ConsensusService {
         val fromEvent = events.find { it.id() == from } ?: return emptyList()
         val fromIndex = events.indexOf(fromEvent)
 
-        return events.filterIndexed { index, _ -> index > fromIndex }
+        return events.subList(fromIndex, events.lastIndex)
     }
 
     fun getEventsInfo(): List<EventInfo> {
@@ -96,21 +101,18 @@ class ConsensusService {
 
         println("New events: $events")
 
-        if (events.isNotEmpty()) {
-            while (sendEvents(peer, events) == null)
-                println("Trying to send events $events to $peer")
+        sendEvents(peer, events)
 
-            lastEventSentToPeer[peer.getId()] = events.last().id()
+        lastEventSentToPeer[peer.getId()] = events.last().id()
 
-            println("Sent events $events to $peer")
-        }
+        println("Sent events $events to $peer")
     }
 
     fun sendEvents(peer: KAddress, events: List<HashgraphEvent>) = runBlocking {
-        p2p.requestFrom<Boolean>(peer.getAddress()) {
-            val payload = HashgraphSyncMessage(events, identityService.getId())
-            Message(TOPIC_HASHGRAPH, HashgraphMessageTypes.SYNC, payload)
-        }
+        val payload = HashgraphSyncMessage(events, identityService.getId())
+        val message = Message(TOPIC_HASHGRAPH, HashgraphMessageTypes.SYNC, payload)
+
+        p2p.send(peer.getAddress(), message)
     }
 
     fun syncWithRandom() {

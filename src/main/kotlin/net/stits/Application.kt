@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.context.annotation.Bean
 
 
-val K_PARAMETER = 2
+val K_PARAMETER = 10
 val ID_SPACE_SIZE = 256
 
 @SpringBootApplication
@@ -15,7 +15,7 @@ open class Application {
 
     @Bean
     open fun p2pInitializer(): P2P {
-        return P2P(basePackages = arrayOf(packageToScan), maxPacketSizeBytes = 100 * 1024)
+        return P2P(basePackages = arrayOf(packageToScan))
     }
 }
 
