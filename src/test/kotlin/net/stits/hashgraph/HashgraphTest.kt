@@ -3,6 +3,7 @@ package net.stits.hashgraph
 import net.stits.utils.CryptoUtils
 import net.stits.utils.contentEquals
 import net.stits.utils.equalsIgnoreSize
+import net.stits.utils.randomOrNull
 import org.junit.Test
 import java.security.KeyPair
 
@@ -23,7 +24,7 @@ class HashgraphTest {
         `getEvents and getWitnesses works properly`()
     }
 
-    fun `unable to add multiple genesis events`() {
+    private fun `unable to add multiple genesis events`() {
         val hg = Hashgraph()
 
         val issuer0 = participants[0]
@@ -62,7 +63,7 @@ class HashgraphTest {
         assert(!hg.isValid(nonGenesisEvent11))
     }
 
-    fun `unable to add forks`() {
+    private fun `unable to add forks`() {
         val hg = Hashgraph()
 
         val issuer2 = participants[2]
@@ -88,7 +89,7 @@ class HashgraphTest {
         assert(hg.isValid(nonGenesisEvent22))
     }
 
-    fun `events without parents are stored`() {
+    private fun `events without parents are stored`() {
         val hg = Hashgraph()
 
         val issuer4 = participants[4]
@@ -117,7 +118,7 @@ class HashgraphTest {
         assert(hg.getEventsWithoutParents().size == 3) { "There should be only 3 appropriate events" }
     }
 
-    fun `getAncestors and getSelfAncestors work properly`() {
+    private fun `getAncestors and getSelfAncestors work properly`() {
         val hg = Hashgraph()
 
         val issuer0 = participants[0]
@@ -153,7 +154,7 @@ class HashgraphTest {
         ) { "Event has invalid self-ancestors" }
     }
 
-    fun `getEvents and getWitnesses works properly`() {
+    private fun `getEvents and getWitnesses works properly`() {
         val hg = Hashgraph()
         val issuer0 = participants[0]
         val issuer1 = participants[1]
@@ -469,6 +470,49 @@ class HashgraphTest {
         events2.forEach { hg2.processEvent(it) }
 
         assert(hg2.getConsensusEvents().equalsIgnoreSize(hg1.getConsensusEvents())) { "Hashgraphs are inconsistent" }
+    }
+
+    @Test
+    fun `almost real setup works okay`() {
+        val hashgraphs = participants.map { Hashgraph() }
+        val genesisEvents = participants.map { builder.buildGenesis(it) }
+        hashgraphs.forEachIndexed { idx, hg -> hg.processEvent(genesisEvents[idx]) }
+
+        val totalSyncs = 200
+        var skippedSyncs = 0
+
+        (1..totalSyncs).forEach {
+            val local = participants.randomOrNull()!!
+            val localId = CryptoUtils.publicKeyToId(local.public)
+            val localIdx = participants.indexOf(local)
+            val localHG = hashgraphs[localIdx]
+
+            val remote = participants.randomOrNull()!!
+            val remoteId = CryptoUtils.publicKeyToId(remote.public)
+            val remoteIdx = participants.indexOf(remote)
+            val remoteHG = hashgraphs[remoteIdx]
+
+            if (remoteIdx == localIdx) {
+                skippedSyncs++
+                return@forEach
+            }
+
+
+            val syncedEvents = remoteHG.getEventsInAddOrder().map { remoteHG.getEventById(it)!! }
+            syncedEvents.map { localHG.processEvent(it) }
+
+            val newEvent = builder
+                .withSelfParent(localHG.getLastEventsByParticipants()[localId])
+                .withOtherParent(localHG.getLastEventsByParticipants()[remoteId])
+                .build(local)
+
+            localHG.processEvent(newEvent)
+
+            println(it)
+        }
+
+        println("Total syncs: $totalSyncs, skipped syncs: $skippedSyncs")
+        assert(true)
     }
 }
 

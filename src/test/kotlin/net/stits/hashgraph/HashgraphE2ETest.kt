@@ -72,12 +72,7 @@ class HashgraphE2ETest {
 
         runBlocking { delay(10000) }
 
-        val eventsByClients = nodeClients
-            .map { it.getEvents() }
-
-        val consensusEventsByClients = eventsByClients
-            .map { events -> events.filter { it.consensusReached } }
-
+        val consensusEventsByClients = nodeClients.map { it.getConsensusEvents() }
         val lesserConsensusEventCollection = consensusEventsByClients.minBy { it.size }!!
 
         val allHashgraphsAreConsistent = consensusEventsByClients

@@ -48,12 +48,10 @@ class ConsensusService {
     fun getLastEvents() = hg.getLastEventsByParticipants()
     fun getLastEventsSortedByAddingOrder(): List<EventId> = hg.getEventsInAddOrder().reversed()
 
-    fun getEvents(): List<HashgraphEvent> {
-        return hg.getEventsInAddOrder().map { hg.getEventById(it)!! }
-    }
+    fun getAllEvents(): List<HashgraphEvent> = hg.getEventsInAddOrder().map { hg.getEventById(it)!! }
 
-    fun getEvents(from: EventId): List<HashgraphEvent> {
-        val events = getEvents()
+    fun getAllEvents(from: EventId): List<HashgraphEvent> {
+        val events = getAllEvents()
 
         val fromEvent = events.find { it.id() == from } ?: return emptyList()
         val fromIndex = events.indexOf(fromEvent)
@@ -61,26 +59,7 @@ class ConsensusService {
         return events.subList(fromIndex, events.lastIndex)
     }
 
-    fun getEventsInfo(): List<EventInfo> {
-        val allEvents = hg.getEvents()
-        val consensusEvents = hg.getConsensusEvents().map { hg.getEventById(it)!! }
-        val unorderedEvents = allEvents.minus(consensusEvents)
-
-        val result = mutableListOf<EventInfo>()
-        consensusEvents.forEach { result.add(EventInfo(it, true)) }
-        unorderedEvents.forEach { result.add(EventInfo(it, false)) }
-
-        return result
-    }
-
-    fun getEventsInfo(from: EventId): List<EventInfo> {
-        val events = getEventsInfo()
-
-        val fromEvent = events.find { it.id == from } ?: return emptyList()
-        val fromIndex = events.indexOf(fromEvent)
-
-        return events.filterIndexed { index, _ -> index > fromIndex }
-    }
+    fun getConsensusEvents() = hg.getConsensusEvents().map { hg.getEventById(it)!! }
 
     // TODO: to networking service all this mess
     private val lastEventSentToPeer = hashMapOf<CreatorId, EventId>()
@@ -97,7 +76,7 @@ class ConsensusService {
     fun syncWithPeer(peer: KAddress) {
         val lastEvent = lastEventSentToPeer[peer.getId()]
 
-        val events = if (lastEvent == null) getEvents() else getEvents(lastEvent)
+        val events = if (lastEvent == null) getAllEvents() else getAllEvents(lastEvent)
 
         println("New events: $events")
 

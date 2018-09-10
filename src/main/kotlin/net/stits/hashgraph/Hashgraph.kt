@@ -124,8 +124,6 @@ class Hashgraph {
         return true
     }
 
-
-
     fun processEventsWithoutParents(): Boolean {
         val eventsWithoutParentsToDelete = mutableListOf<HashgraphEvent>()
 

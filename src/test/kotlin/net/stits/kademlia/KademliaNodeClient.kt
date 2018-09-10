@@ -3,7 +3,7 @@ package net.stits.kademlia
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
-import net.stits.hashgraph.services.EventInfo
+import net.stits.hashgraph.HashgraphEvent
 import net.stits.kademlia.data.KAddress
 import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.http.HttpEntity
@@ -40,8 +40,8 @@ class KademliaNodeClient(private val restTemplate: TestRestTemplate, private val
 
     fun startSyncing() = doPost("http://$baseUrl/sync/start")
 
-    fun getEvents(): List<EventInfo> {
-        val response = doGet("http://$baseUrl/events")!!
+    fun getConsensusEvents(): List<HashgraphEvent> {
+        val response = doGet("http://$baseUrl/events/consensus")!!
 
         return mapper.readValue(response)
     }
